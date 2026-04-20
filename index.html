@@ -385,11 +385,15 @@
     cursor: default;
   }
 
+  .info-item.has-tooltip.tooltip-open {
+    z-index: 50;
+  }
+
   .metric-tooltip {
     position: absolute;
     left: 14px;
     top: calc(100% + 6px);
-    z-index: 20;
+    z-index: 100;
     min-width: 260px;
     max-width: 320px;
     padding: 14px 16px;
@@ -429,10 +433,7 @@
     pointer-events: none;
   }
 
-  .info-item.has-tooltip:hover .metric-tooltip,
-  .info-item.has-tooltip:focus-within .metric-tooltip,
-  .info-item.has-tooltip.tooltip-open .metric-tooltip,
-  .metric-tooltip:hover {
+  .info-item.has-tooltip.tooltip-open .metric-tooltip {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
@@ -2579,6 +2580,10 @@ function bindDividendTooltip() {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.add('tooltip-open');
   };
+  const close = () => {
+    if (closeTimer) clearTimeout(closeTimer);
+    card.classList.remove('tooltip-open');
+  };
   const scheduleClose = (event) => {
     if (event && typeof event.clientX === 'number') {
       lastPointerEvent = event;
@@ -2601,11 +2606,18 @@ function bindDividendTooltip() {
     open();
   });
   card.addEventListener('mouseleave', scheduleClose);
+  card.addEventListener('focusin', open);
+  card.addEventListener('focusout', scheduleClose);
   tooltip.addEventListener('mouseenter', (event) => {
     lastPointerEvent = event;
     open();
   });
   tooltip.addEventListener('mouseleave', scheduleClose);
+  tooltip.addEventListener('click', (event) => {
+    if (event.target.closest('a')) {
+      event.stopPropagation();
+    }
+  });
   document.addEventListener('pointermove', (event) => {
     lastPointerEvent = event;
     if (isPointInsideTooltipZone(event)) {
@@ -2614,9 +2626,11 @@ function bindDividendTooltip() {
       open();
       scheduleClose(event);
     } else if (card.classList.contains('tooltip-open')) {
-      scheduleClose(event);
+      close();
     }
   });
+  window.addEventListener('scroll', close, true);
+  window.addEventListener('blur', close);
   card.dataset.tooltipBound = '1';
 }
 
