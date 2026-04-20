@@ -390,10 +390,10 @@
   }
 
   .metric-tooltip {
-    position: absolute;
-    left: 14px;
-    top: calc(100% + 6px);
-    z-index: 100;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 2300;
     min-width: 260px;
     max-width: 320px;
     padding: 14px 16px;
@@ -433,7 +433,7 @@
     pointer-events: none;
   }
 
-  .info-item.has-tooltip.tooltip-open .metric-tooltip {
+  .metric-tooltip.tooltip-open {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
@@ -2550,6 +2550,9 @@ function bindDividendTooltip() {
   const card = document.getElementById('dividendInfoItem');
   const tooltip = document.getElementById('dividendTooltip');
   if (!card || !tooltip || card.dataset.tooltipBound === '1') return;
+  if (tooltip.parentElement !== document.body) {
+    document.body.appendChild(tooltip);
+  }
 
   let closeTimer = null;
   let lastPointerEvent = null;
@@ -2558,6 +2561,20 @@ function bindDividendTooltip() {
       event.clientX <= rect.right + buffer &&
       event.clientY >= rect.top - buffer &&
       event.clientY <= rect.bottom + buffer;
+  };
+  const positionTooltip = () => {
+    const cardRect = card.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(cardRect.left + 14, 12),
+      window.innerWidth - tooltipRect.width - 12
+    );
+    const top = Math.min(
+      cardRect.bottom + 6,
+      window.innerHeight - tooltipRect.height - 12
+    );
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
   };
   const isPointInsideTooltipZone = (event) => {
     const cardRect = card.getBoundingClientRect();
@@ -2579,10 +2596,13 @@ function bindDividendTooltip() {
   const open = () => {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.add('tooltip-open');
+    tooltip.classList.add('tooltip-open');
+    positionTooltip();
   };
   const close = () => {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.remove('tooltip-open');
+    tooltip.classList.remove('tooltip-open');
   };
   const scheduleClose = (event) => {
     if (event && typeof event.clientX === 'number') {
@@ -2592,7 +2612,7 @@ function bindDividendTooltip() {
     closeTimer = setTimeout(() => {
       const pointerStillInside = lastPointerEvent && isPointInsideTooltipZone(lastPointerEvent);
       if (!pointerStillInside && !card.matches(':focus-within')) {
-        card.classList.remove('tooltip-open');
+        close();
       }
     }, 180);
   };
@@ -2614,8 +2634,11 @@ function bindDividendTooltip() {
   });
   tooltip.addEventListener('mouseleave', scheduleClose);
   tooltip.addEventListener('click', (event) => {
-    if (event.target.closest('a')) {
+    const link = event.target.closest('a');
+    if (link) {
+      event.preventDefault();
       event.stopPropagation();
+      window.open(link.href, link.target || '_blank', 'noopener,noreferrer');
     }
   });
   document.addEventListener('pointermove', (event) => {
@@ -2629,8 +2652,17 @@ function bindDividendTooltip() {
       close();
     }
   });
-  window.addEventListener('scroll', close, true);
+  window.addEventListener('resize', () => {
+    if (card.classList.contains('tooltip-open')) positionTooltip();
+  });
+  window.addEventListener('scroll', () => {
+    if (card.classList.contains('tooltip-open')) positionTooltip();
+  }, true);
   window.addEventListener('blur', close);
+  document.documentElement.addEventListener('mouseleave', close);
+  document.addEventListener('pointerout', (event) => {
+    if (!event.relatedTarget) close();
+  });
   card.dataset.tooltipBound = '1';
 }
 
