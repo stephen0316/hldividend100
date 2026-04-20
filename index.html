@@ -439,6 +439,12 @@
     pointer-events: auto;
   }
 
+  .metric-tooltip:empty,
+  .metric-tooltip.tooltip-open:empty {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .metric-tooltip-title {
     font-size: 12px;
     font-weight: 800;
@@ -2555,15 +2561,7 @@ function bindDividendTooltip() {
   }
 
   let closeTimer = null;
-  let lastPointerEvent = null;
   let hoverWatchTimer = null;
-  let bridgeGraceUntil = 0;
-  const isPointInsideRect = (event, rect, buffer = 0) => {
-    return event.clientX > rect.left - buffer &&
-      event.clientX < rect.right + buffer &&
-      event.clientY > rect.top - buffer &&
-      event.clientY < rect.bottom + buffer;
-  };
   const positionTooltip = () => {
     const cardRect = card.getBoundingClientRect();
     const tooltipRect = tooltip.getBoundingClientRect();
@@ -2577,23 +2575,6 @@ function bindDividendTooltip() {
     );
     tooltip.style.left = left + 'px';
     tooltip.style.top = top + 'px';
-  };
-  const isPointInsideTooltipZone = (event) => {
-    const cardRect = card.getBoundingClientRect();
-    const tooltipRect = tooltip.getBoundingClientRect();
-    return isPointInsideRect(event, cardRect) ||
-      isPointInsideRect(event, tooltipRect, 10);
-  };
-  const isPointInsideTooltipBridge = (event) => {
-    const cardRect = card.getBoundingClientRect();
-    const tooltipRect = tooltip.getBoundingClientRect();
-    const bridgeRect = {
-      left: Math.min(cardRect.left, tooltipRect.left) - 8,
-      right: Math.max(cardRect.right, tooltipRect.right) + 8,
-      top: cardRect.bottom - 2,
-      bottom: tooltipRect.top + 12
-    };
-    return isPointInsideRect(event, bridgeRect);
   };
   const hasTooltipFocus = () => {
     return card.matches(':focus-within') || tooltip.contains(document.activeElement);
@@ -2618,7 +2599,7 @@ function bindDividendTooltip() {
           stopHoverWatch();
           return;
         }
-        if (!isPointerHoveringLiveArea() && !hasTooltipFocus() && Date.now() > bridgeGraceUntil) {
+        if (!isPointerHoveringLiveArea() && !hasTooltipFocus()) {
           close();
         }
       }, 60);
@@ -2628,37 +2609,23 @@ function bindDividendTooltip() {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.remove('tooltip-open');
     tooltip.classList.remove('tooltip-open');
-    bridgeGraceUntil = 0;
     stopHoverWatch();
   };
-  const scheduleClose = (event) => {
-    if (event && typeof event.clientX === 'number') {
-      lastPointerEvent = event;
-    }
+  const scheduleClose = () => {
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
-      const pointerStillInside = lastPointerEvent && isPointInsideTooltipZone(lastPointerEvent);
-      if (!isPointerHoveringLiveArea() && !pointerStillInside && !hasTooltipFocus()) {
+      if (!isPointerHoveringLiveArea() && !hasTooltipFocus()) {
         close();
       }
-    }, 180);
+    }, 120);
   };
 
-  card.addEventListener('mouseenter', (event) => {
-    lastPointerEvent = event;
-    open();
-  });
-  card.addEventListener('pointerenter', (event) => {
-    lastPointerEvent = event;
-    open();
-  });
+  card.addEventListener('mouseenter', open);
+  card.addEventListener('pointerenter', open);
   card.addEventListener('mouseleave', scheduleClose);
   card.addEventListener('focusin', open);
   card.addEventListener('focusout', scheduleClose);
-  tooltip.addEventListener('mouseenter', (event) => {
-    lastPointerEvent = event;
-    open();
-  });
+  tooltip.addEventListener('mouseenter', open);
   tooltip.addEventListener('mouseleave', scheduleClose);
   tooltip.addEventListener('click', (event) => {
     const link = event.target.closest('a');
@@ -2666,32 +2633,6 @@ function bindDividendTooltip() {
       event.preventDefault();
       event.stopPropagation();
       window.open(link.href, link.target || '_blank', 'noopener,noreferrer');
-    }
-  });
-  document.addEventListener('pointermove', (event) => {
-    lastPointerEvent = event;
-    if (isPointInsideTooltipZone(event)) {
-      bridgeGraceUntil = 0;
-      open();
-    } else if (card.classList.contains('tooltip-open') && isPointInsideTooltipBridge(event)) {
-      bridgeGraceUntil = Date.now() + 180;
-      open();
-      scheduleClose(event);
-    } else if (card.classList.contains('tooltip-open')) {
-      close();
-    }
-  });
-  document.addEventListener('mousemove', (event) => {
-    lastPointerEvent = event;
-    if (isPointInsideTooltipZone(event)) {
-      bridgeGraceUntil = 0;
-      open();
-    } else if (card.classList.contains('tooltip-open') && isPointInsideTooltipBridge(event)) {
-      bridgeGraceUntil = Date.now() + 180;
-      open();
-      scheduleClose(event);
-    } else if (card.classList.contains('tooltip-open')) {
-      close();
     }
   });
   window.addEventListener('resize', () => {
@@ -2705,12 +2646,14 @@ function bindDividendTooltip() {
   document.addEventListener('pointerout', (event) => {
     if (!event.relatedTarget) close();
   });
+  window.closeDividendTooltip = close;
   card.dataset.tooltipBound = '1';
 }
 
 // ========== 操作函数 ==========
 
 async function manualFetch() {
+  if (typeof window.closeDividendTooltip === 'function') window.closeDividendTooltip();
   const btn = document.getElementById('btnFetch');
   btn.disabled = true;
   btn.textContent = '⏳ 获取中...';
@@ -2741,6 +2684,7 @@ async function manualFetch() {
 }
 
 function toggleCalibrate() {
+  if (typeof window.closeDividendTooltip === 'function') window.closeDividendTooltip();
   const panel = document.getElementById('calibratePanel');
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
@@ -2789,6 +2733,7 @@ function calibrateDividend() {
 }
 
 function clearHistory() {
+  if (typeof window.closeDividendTooltip === 'function') window.closeDividendTooltip();
   if (!confirm('确定要清除所有本地历史数据吗？此操作不可撤销。')) return;
   localStorage.removeItem(STORAGE_KEY);
   showToast('历史数据已清除', 'info');
@@ -2809,6 +2754,8 @@ function clearHistory() {
   const dividendTooltip = document.getElementById('dividendTooltip');
   if (dividendInfoItem && dividendTooltip) {
     dividendInfoItem.classList.remove('has-tooltip');
+    dividendInfoItem.classList.remove('tooltip-open');
+    dividendTooltip.classList.remove('tooltip-open');
     dividendInfoItem.removeAttribute('title');
     dividendTooltip.innerHTML = '';
   }
