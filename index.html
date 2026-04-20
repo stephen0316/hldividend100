@@ -1308,6 +1308,10 @@
     background: var(--card-border);
   }
 
+  .mobile-tabbar {
+    display: none;
+  }
+
 
   .loading-overlay {
     position: fixed;
@@ -1788,6 +1792,50 @@
       gap: 12px;
     }
 
+    .toolbar-card {
+      display: none;
+    }
+
+    .mobile-tabbar {
+      position: sticky;
+      top: max(8px, env(safe-area-inset-top));
+      z-index: 80;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid rgba(226,230,237,0.96);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.93);
+      box-shadow: 0 12px 28px rgba(26,35,50,0.10);
+      backdrop-filter: blur(10px);
+    }
+
+    .mobile-tab {
+      appearance: none;
+      border: 0;
+      border-radius: 9px;
+      padding: 9px 6px;
+      background: transparent;
+      color: var(--text-dim);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .mobile-tab.active {
+      background: rgba(46,125,209,0.10);
+      color: var(--accent-blue);
+      box-shadow: inset 0 0 0 1px rgba(46,125,209,0.14);
+    }
+
+    [data-mobile-tab].mobile-tab-hidden {
+      display: none !important;
+    }
+
     .card,
     .toolbar-card,
     .combined-card {
@@ -2243,10 +2291,16 @@
     </div>
   </div>
 
-  <!-- ======================== 综合信号 ======================== -->
-  <div class="section-divider"><h2>🧭 综合操作信号</h2></div>
+  <nav class="mobile-tabbar" aria-label="移动端看板导航">
+    <button class="mobile-tab active" type="button" data-mobile-tab-button="summary" aria-pressed="true">综合建议</button>
+    <button class="mobile-tab" type="button" data-mobile-tab-button="spread" aria-pressed="false">息差信号</button>
+    <button class="mobile-tab" type="button" data-mobile-tab-button="ma120" aria-pressed="false">MA120</button>
+  </nav>
 
-  <div class="combined-card" id="combinedCard">
+  <!-- ======================== 综合信号 ======================== -->
+  <div class="section-divider mobile-tab-active" data-mobile-tab="summary"><h2>🧭 综合操作信号</h2></div>
+
+  <div class="combined-card mobile-tab-active" id="combinedCard" data-mobile-tab="summary">
     <!-- 左：息差指标 -->
     <div class="combined-input">
       <div class="combined-input-label">息差信号（估值锚）</div>
@@ -2279,7 +2333,7 @@
   </div>
 
   <!-- 主信号 + 执行规则 -->
-  <div class="strategy-layout">
+  <div class="strategy-layout mobile-tab-hidden" data-mobile-tab="spread">
     <div class="card signal-stage-card">
       <div class="card-title">当前息差信号</div>
       <div class="gauge-container">
@@ -2346,7 +2400,7 @@
     </div>
   </div>
 
-  <button class="evidence-strip" type="button" title="查看历史回测数据" onclick="openBacktestDrawer('backtest.html?embedded=1')">
+  <button class="evidence-strip mobile-tab-hidden" type="button" title="查看历史回测数据" onclick="openBacktestDrawer('backtest.html?embedded=1')" data-mobile-tab="spread">
     <div class="evidence-strip-main">
       <div class="evidence-strip-badge">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -2371,7 +2425,7 @@
   </button>
 
   <!-- 图表区域 -->
-  <div class="charts-grid">
+  <div class="charts-grid mobile-tab-hidden" data-mobile-tab="spread">
     <div class="card">
       <div class="card-title">息差趋势</div>
       <div class="chart-note">观察最近一段时间风险补偿是继续走阔还是开始回落，帮助判断当前信号是在强化还是钝化。</div>
@@ -2389,10 +2443,10 @@
   </div>
 
   <!-- ======================== MA120 均线监控模块 ======================== -->
-  <div class="section-divider"><h2>📈 红利指数 MA120 均线监控</h2></div>
+  <div class="section-divider mobile-tab-hidden" data-mobile-tab="ma120"><h2>📈 红利指数 MA120 均线监控</h2></div>
 
   <!-- MA120 仪表盘 + 规则 -->
-  <div class="ma120-section">
+  <div class="ma120-section mobile-tab-hidden" data-mobile-tab="ma120">
     <div class="card">
       <div class="card-title">当前偏离 MA120 均线</div>
       <div class="ma120-gauge-container">
@@ -2476,7 +2530,7 @@
   </div>
 
   <!-- MA120 走势图 -->
-  <div class="card">
+  <div class="card mobile-tab-hidden" data-mobile-tab="ma120">
     <div class="card-title">红利低波100 指数走势 vs MA120 均线</div>
     <div class="ma120-chart-wrapper">
       <canvas id="ma120Chart"></canvas>
@@ -2485,7 +2539,7 @@
 
   <!-- ======================== 原有历史记录 ======================== -->
 
-  <div class="card">
+  <div class="card mobile-tab-hidden" data-mobile-tab="spread">
     <div class="history-card-header">
       <div class="card-title">息差历史记录</div>
       <button class="btn btn-secondary history-clear-btn" id="btnClearHistory" onclick="clearHistory()">🗑️ 清除历史</button>
@@ -2624,6 +2678,42 @@ function resetAllCharts() {
   spreadChart = null;
   rateChart = null;
   ma120Chart = null;
+}
+
+function resizeVisibleCharts() {
+  [spreadChart, rateChart, ma120Chart].forEach(chart => {
+    if (!chart) return;
+    if (typeof chart.resize === 'function') chart.resize();
+    if (typeof chart.update === 'function') chart.update('none');
+  });
+}
+
+function setMobileTab(tabName) {
+  document.querySelectorAll('[data-mobile-tab-button]').forEach(btn => {
+    const active = btn.dataset.mobileTabButton === tabName;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  });
+
+  document.querySelectorAll('[data-mobile-tab]').forEach(panel => {
+    const active = panel.dataset.mobileTab === tabName;
+    panel.classList.toggle('mobile-tab-active', active);
+    panel.classList.toggle('mobile-tab-hidden', !active);
+  });
+
+  if (typeof window.closeDividendTooltip === 'function') window.closeDividendTooltip();
+  window.requestAnimationFrame(resizeVisibleCharts);
+}
+
+function bindMobileTabs() {
+  const buttons = document.querySelectorAll('[data-mobile-tab-button]');
+  if (!buttons.length) return;
+  buttons.forEach(btn => {
+    if (btn.dataset.bound === '1') return;
+    btn.addEventListener('click', () => setMobileTab(btn.dataset.mobileTabButton));
+    btn.dataset.bound = '1';
+  });
+  setMobileTab(document.querySelector('[data-mobile-tab-button].active')?.dataset.mobileTabButton || 'summary');
 }
 
 // ========== API 代理调用（走 Vercel Serverless Functions）==========
@@ -3664,10 +3754,13 @@ async function manualFetch() {
       initCharts(records);
     }
     // MA120 模块
+    let deviation = null;
     if (ma120Data) {
-      updateMA120UI(ma120Data, currentPoint);
+      deviation = updateMA120UI(ma120Data, currentPoint);
       renderMA120Chart(ma120Data);
     }
+    updateCombinedSignalUI(lastRecord.spread, deviation);
+    resizeVisibleCharts();
     showToast('数据获取成功！', 'success');
   } catch (e) {
     showToast('获取失败: ' + e.message, 'error');
@@ -3833,6 +3926,7 @@ async function init() {
 
 // 启动
 bindIndexInfoPopover();
+bindMobileTabs();
 init();
 </script>
 </body>
