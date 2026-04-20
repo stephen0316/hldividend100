@@ -1369,6 +1369,787 @@
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
   }
+
+  /* ========== 移动端最终兜底：放在所有基础样式之后，避免被后续规则覆盖 ========== */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  .dashboard,
+  .card,
+  .toolbar-card,
+  .combined-card,
+  .footer-info,
+  .strategy-layout,
+  .charts-grid,
+  .ma120-section,
+  .action-bar,
+  .combined-input,
+  .combined-output,
+  .rule-content,
+  .ma-rule-content,
+  .evidence-strip-main {
+    min-width: 0;
+  }
+
+  .btn,
+  .combined-signal-badge,
+  .matrix-chip,
+  .evidence-strip-action {
+    max-width: 100%;
+  }
+
+  /* ========== 桌面端响应式：覆盖不同电脑分辨率 ========== */
+  @media (min-width: 721px) {
+    body {
+      padding: 24px 20px 28px;
+    }
+
+    .dashboard {
+      width: 100%;
+      max-width: 1400px;
+      gap: 18px;
+    }
+
+    .card {
+      padding: 24px;
+    }
+
+    .toolbar-card {
+      padding: 14px 18px;
+    }
+
+    .footer-info,
+    .strategy-layout,
+    .charts-grid,
+    .ma120-section {
+      gap: 20px;
+    }
+
+    .footer-info {
+      gap: 12px;
+    }
+
+    .chart-wrapper {
+      height: 280px;
+    }
+
+    .ma120-chart-wrapper {
+      height: 300px;
+    }
+
+    .gauge-container {
+      min-height: 390px;
+    }
+
+    .ma120-gauge-container {
+      min-height: 280px;
+    }
+  }
+
+  @media (min-width: 1600px) {
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+    }
+
+    .strategy-layout,
+    .ma120-section {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .footer-info {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .combined-card {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      padding: 26px 30px;
+    }
+  }
+
+  @media (min-width: 1181px) and (max-width: 1599px) {
+    .dashboard {
+      max-width: 1400px;
+    }
+
+    .strategy-layout,
+    .ma120-section,
+    .charts-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .gauge-value {
+      font-size: clamp(54px, 4.4vw, 64px);
+    }
+
+    .deviation-number {
+      font-size: clamp(36px, 3.2vw, 42px);
+    }
+  }
+
+  @media (min-width: 901px) and (max-width: 1180px) {
+    body {
+      padding: 20px 18px 28px;
+    }
+
+    .header {
+      margin-bottom: 18px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+    }
+
+    .dashboard {
+      gap: 14px;
+    }
+
+    .card {
+      padding: 18px;
+      border-radius: 18px;
+    }
+
+    .toolbar-card {
+      padding: 14px 16px;
+    }
+
+    .action-bar {
+      gap: 10px;
+    }
+
+    .action-bar .hint-text {
+      max-width: 46%;
+      line-height: 1.5;
+    }
+
+    .footer-info {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .info-item {
+      padding: 13px 14px;
+    }
+
+    .info-item .info-label {
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    .info-item .info-value {
+      font-size: 17px;
+    }
+
+    .combined-card {
+      grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1.1fr);
+      gap: 18px;
+      padding: 22px;
+    }
+
+    .combined-priority-note {
+      padding: 11px 12px;
+    }
+
+    .matrix-chip {
+      font-size: 10px;
+      padding: 4px 8px;
+    }
+
+    .strategy-layout,
+    .ma120-section {
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 14px;
+    }
+
+    .charts-grid {
+      gap: 14px;
+    }
+
+    .gauge-container {
+      min-height: 310px;
+      padding: 24px 0 12px;
+    }
+
+    .gauge-value {
+      font-size: 48px;
+    }
+
+    .gauge-signal {
+      font-size: 17px;
+      padding: 10px 22px;
+    }
+
+    .spread-scale {
+      margin-top: 26px;
+    }
+
+    .rule-item,
+    .ma-rule-item {
+      padding: 11px 12px;
+      gap: 10px;
+    }
+
+    .rule-icon {
+      width: 38px;
+      height: 38px;
+      font-size: 18px;
+    }
+
+    .rule-content .rule-desc,
+    .ma-rule-desc {
+      line-height: 1.45;
+    }
+
+    .evidence-strip {
+      padding: 16px 18px;
+    }
+
+    .chart-wrapper {
+      height: 240px;
+    }
+
+    .ma120-gauge-container {
+      min-height: 250px;
+      padding-top: 16px;
+    }
+
+    .deviation-number {
+      font-size: 34px;
+    }
+
+    .ma120-signal {
+      font-size: 16px;
+      padding: 9px 22px;
+    }
+
+    .ma120-metrics {
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .metric-item {
+      padding: 15px 16px 14px;
+      border-radius: 14px;
+    }
+
+    .metric-item .value {
+      font-size: 18px;
+    }
+
+    .ma120-chart-wrapper {
+      height: 270px;
+    }
+  }
+
+  @media (min-width: 721px) and (max-width: 980px) {
+    body {
+      padding: 18px 16px 26px;
+    }
+
+    .header h1 {
+      font-size: 23px;
+    }
+
+    .header .status-line {
+      max-width: calc(100vw - 48px);
+      flex-wrap: wrap;
+      justify-content: center;
+      border-radius: 16px;
+    }
+
+    .action-bar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(128px, auto) minmax(128px, auto);
+      align-items: center;
+    }
+
+    .action-bar .hint-text {
+      min-width: 0;
+      margin-right: 0 !important;
+      line-height: 1.5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .footer-info {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .strategy-layout,
+    .ma120-section,
+    .charts-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .combined-card {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .combined-output {
+      align-items: flex-start;
+    }
+
+    .combined-basis {
+      max-width: 100%;
+      text-align: left;
+    }
+
+    .gauge-container,
+    .ma120-gauge-container {
+      min-height: auto;
+    }
+
+    .ma120-metrics {
+      max-width: 680px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+
+  @media (max-width: 720px) {
+    body {
+      padding: max(12px, env(safe-area-inset-top)) 10px max(18px, env(safe-area-inset-bottom));
+    }
+
+    .header {
+      margin-bottom: 14px;
+      padding: 0 4px;
+    }
+
+    .header h1 {
+      font-size: 19px;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+
+    .header .subtitle {
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .header .update-time {
+      font-size: 10px;
+      margin-top: 6px;
+    }
+
+    .header .status-line {
+      max-width: calc(100vw - 28px);
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 12px;
+      font-size: 10px;
+      text-align: left;
+    }
+
+    .index-pill-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .index-info-trigger {
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .index-info-popover {
+      position: fixed;
+      top: 118px;
+      left: 10px;
+      right: 10px;
+      width: auto;
+      max-width: none;
+      transform: translateY(-4px);
+      border-radius: 12px;
+      font-size: 11px;
+    }
+
+    .index-info-popover::before {
+      display: none;
+    }
+
+    .status-line:hover .index-info-popover,
+    .status-line.index-info-open .index-info-popover,
+    .index-info-trigger:focus + .index-info-popover {
+      transform: translateY(0);
+    }
+
+    .dashboard {
+      width: min(100%, calc(100vw - 20px));
+      max-width: 100%;
+      gap: 12px;
+    }
+
+    .card,
+    .toolbar-card,
+    .combined-card {
+      border-radius: 14px;
+      padding: 16px;
+    }
+
+    .card:hover {
+      transform: none;
+    }
+
+    .toolbar-card {
+      padding: 14px;
+    }
+
+    .action-bar {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      justify-content: stretch;
+      width: 100%;
+    }
+
+    .action-bar .hint-text {
+      display: none;
+    }
+
+    .action-bar .btn {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 8px;
+      border-radius: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .footer-info {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+
+    .info-item {
+      min-width: 0;
+      padding: 13px 14px;
+      border-radius: 12px;
+    }
+
+    .info-item .info-label {
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      white-space: normal;
+      line-height: 1.35;
+    }
+
+    .info-item .info-value {
+      font-size: 17px;
+      word-break: break-word;
+    }
+
+    .metric-tooltip {
+      left: 10px !important;
+      right: 10px;
+      width: auto;
+      min-width: 0;
+      max-width: none;
+    }
+
+    .section-divider {
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    .section-divider h2 {
+      font-size: 15px;
+      white-space: normal;
+    }
+
+    .combined-card {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .combined-output {
+      align-items: flex-start;
+    }
+
+    .combined-basis {
+      max-width: 100%;
+      text-align: left;
+    }
+
+    .combined-priority-note {
+      margin-top: 0;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .combined-matrix-hint {
+      gap: 7px;
+      padding-top: 12px;
+    }
+
+    .combined-matrix-hint-label {
+      width: 100%;
+      margin-right: 0;
+    }
+
+    .matrix-chip {
+      font-size: 10px;
+      padding: 4px 8px;
+    }
+
+    .strategy-layout,
+    .ma120-section,
+    .charts-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .gauge-container {
+      min-height: auto;
+      padding: 22px 0 4px;
+    }
+
+    .gauge-value {
+      font-size: 42px;
+    }
+
+    .gauge-label {
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .gauge-signal {
+      font-size: 16px;
+      margin-top: 16px;
+      padding: 9px 20px;
+      letter-spacing: 0;
+    }
+
+    .spread-scale {
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .rules-card,
+    .ma120-rules-card {
+      justify-content: flex-start;
+    }
+
+    .rule-item,
+    .ma-rule-item {
+      align-items: flex-start;
+      padding: 11px;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .rule-item.active,
+    .ma-rule-item.active {
+      transform: none;
+    }
+
+    .rule-icon,
+    .ma-rule-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    .rule-content .rule-title,
+    .ma-rule-title {
+      font-size: 13px;
+    }
+
+    .rule-content .rule-desc,
+    .ma-rule-desc {
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .evidence-strip {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+      padding: 15px;
+      border-radius: 14px;
+    }
+
+    .evidence-strip-main {
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .evidence-strip-badge {
+      width: 38px;
+      height: 38px;
+    }
+
+    .evidence-strip-title {
+      font-size: 14px;
+    }
+
+    .evidence-strip-desc {
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .evidence-strip-action {
+      align-self: flex-start;
+      padding: 8px 13px;
+      border-radius: 10px;
+    }
+
+    .chart-wrapper,
+    .ma120-chart-wrapper {
+      height: 220px;
+    }
+
+    .chart-note {
+      font-size: 11px;
+      margin-bottom: 12px;
+    }
+
+    .ma120-gauge-container {
+      min-height: auto;
+      padding-top: 12px;
+      gap: 12px;
+    }
+
+    .deviation-bar-wrap {
+      max-width: 100%;
+    }
+
+    .deviation-bar-labels {
+      font-size: 9px;
+    }
+
+    .deviation-number {
+      font-size: 36px;
+    }
+
+    .ma120-signal {
+      font-size: 15px;
+      padding: 8px 20px;
+      letter-spacing: 0;
+    }
+
+    .ma120-metrics {
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .metric-item {
+      padding: 15px 16px 14px;
+      border-radius: 14px;
+    }
+
+    .metric-item .value {
+      font-size: 20px;
+    }
+
+    .history-card-header {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-clear-btn {
+      width: 100%;
+    }
+
+    .history-table {
+      min-width: 680px;
+      font-size: 11px;
+    }
+
+    .history-table th,
+    .history-table td {
+      padding: 8px 7px;
+    }
+
+    .calibrate-section {
+      display: grid;
+      grid-template-columns: 1fr;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .input-group input,
+    .calibrate-section .btn {
+      width: 100%;
+    }
+
+    .calibrate-section .calib-hint {
+      align-self: auto !important;
+      padding-bottom: 0 !important;
+      line-height: 1.55;
+      text-align: left;
+    }
+
+    .data-note {
+      margin: 12px 10px 0;
+      font-size: 10px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  @media (max-width: 390px) {
+    body {
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+
+    .header h1 {
+      font-size: 18px;
+    }
+
+    .header .status-line {
+      max-width: calc(100vw - 20px);
+      grid-template-columns: auto auto minmax(0, 1fr);
+    }
+
+    .index-info-trigger {
+      grid-column: 1 / -1;
+      justify-self: center;
+    }
+
+    .action-bar {
+      grid-template-columns: 1fr;
+    }
+
+    .footer-info {
+      gap: 8px;
+    }
+
+    .info-item {
+      padding: 12px;
+    }
+
+    .info-item .info-value {
+      font-size: 16px;
+    }
+
+    .combined-signal-badge {
+      width: 100%;
+      white-space: normal;
+    }
+
+    .chart-wrapper,
+    .ma120-chart-wrapper {
+      height: 200px;
+    }
+  }
 </style>
 </head>
 <body>
