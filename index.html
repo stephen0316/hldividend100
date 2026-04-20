@@ -1,0 +1,2761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>红利低波100 息差监控看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --card-border: #e2e6ed;
+    --text: #1a2332;
+    --text-dim: #6b7a90;
+    --accent-green: #0d9f82;
+    --accent-red: #e04848;
+    --accent-yellow: #d4a017;
+    --accent-blue: #2e7dd1;
+    --accent-orange: #d97a0b;
+    --zone-clear: rgba(224, 72, 72, 0.08);
+    --zone-normal: rgba(46, 125, 209, 0.08);
+    --zone-double: rgba(13, 159, 130, 0.08);
+    --accent-purple: #7c3aed;
+    --zone-heavy-buy: rgba(13, 159, 130, 0.12);
+    --zone-buy: rgba(46, 125, 209, 0.08);
+    --zone-stop: rgba(212, 160, 23, 0.10);
+    --zone-sell: rgba(217, 122, 11, 0.10);
+    --zone-heavy-sell: rgba(224, 72, 72, 0.10);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background:
+      radial-gradient(circle at 18% 8%, rgba(13,159,130,0.10), transparent 24%),
+      radial-gradient(circle at 82% 16%, rgba(217,122,11,0.11), transparent 26%),
+      radial-gradient(circle at 50% 0%, rgba(46,125,209,0.08), transparent 30%),
+      linear-gradient(180deg, #fbfcf8 0%, var(--bg) 30%, #eef4f7 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 20px 28px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  .header .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .header .update-time {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .header .status-line {
+    margin-top: 12px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(226,230,237,0.95);
+    box-shadow: 0 8px 20px rgba(26,35,50,0.04);
+  }
+
+  .header .status-line .status-ok { color: var(--accent-green); }
+  .header .status-line .status-err { color: var(--accent-red); }
+
+  .dashboard {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    gap: 18px;
+  }
+
+  /* 顶部操作栏 */
+  .toolbar-card {
+    padding: 14px 18px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 10px 26px rgba(26,35,50,0.04);
+  }
+
+  .action-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 9px 16px;
+    border: none;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent-blue), #3a8fd8);
+    color: white;
+  }
+
+  .btn-secondary {
+    background: rgba(0,0,0,0.04);
+    color: var(--text);
+    border: 1px solid var(--card-border);
+  }
+
+  .btn-calibrate {
+    background: linear-gradient(135deg, var(--accent-orange), #e07c00);
+    color: white;
+  }
+
+  /* 息差主区域 */
+  .strategy-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .strategy-side {
+    display: grid;
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 24px;
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+    box-shadow: 0 8px 24px rgba(26,35,50,0.04);
+  }
+
+  .card:hover { border-color: #c8cdd6; box-shadow: 0 14px 30px rgba(26,35,50,0.08); }
+
+  .card-title {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* 息差主仪表盘 */
+  .gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 440px;
+    padding: 36px 0 20px;
+  }
+
+  .gauge-svg { width: 340px; height: 220px; }
+
+  .gauge-value { font-size: 56px; font-weight: 800; margin-top: -2px; line-height: 1; }
+  .gauge-value.green { color: var(--accent-green); }
+  .gauge-value.yellow { color: var(--accent-yellow); }
+  .gauge-value.red { color: var(--accent-red); }
+  .gauge-value.blue { color: var(--accent-blue); }
+
+  .gauge-label { font-size: 16px; color: var(--text-dim); margin-top: 4px; }
+
+  .gauge-signal {
+    margin-top: 22px;
+    padding: 12px 28px;
+    border-radius: 30px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .signal-normal { background: var(--zone-normal); color: var(--accent-blue); border: 1px solid rgba(46, 125, 209, 0.2); }
+  .signal-double { background: var(--zone-double); color: var(--accent-green); border: 1px solid rgba(13, 159, 130, 0.2); }
+  .signal-clear { background: var(--zone-clear); color: var(--accent-red); border: 1px solid rgba(224, 72, 72, 0.2); }
+
+  .signal-stage-card {
+    background:
+      radial-gradient(circle at top center, rgba(46,125,209,0.08), transparent 38%),
+      linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,252,255,0.96));
+  }
+
+  /* 策略规则说明 */
+  .rules-card { display: flex; flex-direction: column; justify-content: center; }
+
+  .card-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+  }
+
+  .card-kicker::before {
+    content: '';
+    width: 18px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.45;
+  }
+
+  .rule-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+  }
+  .rule-item:last-child { margin-bottom: 0; }
+  .rule-item.active { transform: scale(1.02); box-shadow: 0 0 20px rgba(46, 125, 209, 0.12); }
+
+  .rule-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+
+  .rule-content .rule-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .rule-content .rule-desc { font-size: 12px; color: var(--text-dim); }
+
+  .rule-clear .rule-icon { background: rgba(224,72,72,0.08); color: var(--accent-red); }
+  .rule-clear.active { background: var(--zone-clear); border: 1px solid rgba(224,72,72,0.15); }
+  .rule-normal .rule-icon { background: rgba(46,125,209,0.08); color: var(--accent-blue); }
+  .rule-normal.active { background: var(--zone-normal); border: 1px solid rgba(46,125,209,0.15); }
+  .rule-double .rule-icon { background: rgba(13,159,130,0.08); color: var(--accent-green); }
+  .rule-double.active { background: var(--zone-double); border: 1px solid rgba(13,159,130,0.15); }
+
+  /* ========== 历史回测报告入口（独立研究工具分区） ========== */
+  .backtest-cta {
+    appearance: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 22px;
+    border-radius: 16px;
+    text-decoration: none;
+    color: inherit;
+    background: var(--card);
+    /* 虚线边框 —— 明显区别于实线策略规则 */
+    border: 2px dashed rgba(124,58,237,0.30);
+    box-shadow: 0 4px 16px rgba(124,58,237,0.06);
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 右上角装饰角标 */
+  .backtest-cta::before {
+    content: '';
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, rgba(124,58,237,0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .backtest-cta:hover {
+    border-color: rgba(124,58,237,0.55);
+    box-shadow: 0 8px 28px rgba(124,58,237,0.12);
+    background: #fafaff;
+  }
+
+  .backtest-cta-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .backtest-cta-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #7c3aed;
+    background: rgba(124,58,237,0.10);
+    box-shadow: inset 0 0 0 1.5px rgba(124,58,237,0.18);
+  }
+
+  .backtest-cta-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .backtest-cta-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  .backtest-cta-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #7c3aed;
+    background: rgba(124,58,237,0.08);
+    border: 1.5px solid rgba(124,58,237,0.20);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.18s, border-color 0.18s;
+  }
+
+  .backtest-cta:hover .backtest-cta-action {
+    background: rgba(124,58,237,0.14);
+    border-color: rgba(124,58,237,0.35);
+  }
+
+  /* 图表区域 */
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .chart-wrapper { position: relative; height: 280px; }
+  .chart-note {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.65;
+    margin: -4px 0 14px;
+  }
+
+  /* 底部信息 */
+  .footer-info {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 4px 0 2px;
+  }
+
+  .info-item {
+    position: relative;
+    background: rgba(255,255,255,0.72);
+    border-radius: 16px;
+    padding: 15px 16px 14px;
+    text-align: left;
+    border: 1px solid rgba(226,230,237,0.9);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+
+  .info-item.has-tooltip {
+    cursor: default;
+  }
+
+  .metric-tooltip {
+    position: absolute;
+    left: 14px;
+    top: calc(100% + 6px);
+    z-index: 20;
+    min-width: 260px;
+    max-width: 320px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background:
+      linear-gradient(145deg, rgba(255,255,255,0.98), rgba(247,251,255,0.98));
+    border: 1px solid rgba(46,125,209,0.16);
+    box-shadow: 0 18px 44px rgba(31,45,61,0.14);
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+
+  .metric-tooltip::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -14px;
+    height: 16px;
+    background: transparent;
+  }
+
+  .metric-tooltip::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 24px;
+    width: 12px;
+    height: 12px;
+    background: rgba(255,255,255,0.98);
+    border-left: 1px solid rgba(46,125,209,0.16);
+    border-top: 1px solid rgba(46,125,209,0.16);
+    transform: rotate(45deg);
+  }
+
+  .info-item.has-tooltip:hover .metric-tooltip,
+  .info-item.has-tooltip:focus-within .metric-tooltip,
+  .info-item.has-tooltip.tooltip-open .metric-tooltip,
+  .metric-tooltip:hover {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .metric-tooltip-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .metric-tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-dim);
+  }
+
+  .metric-tooltip-row strong {
+    color: var(--text);
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .metric-tooltip a {
+    color: var(--accent-blue);
+    text-decoration: none;
+    font-weight: 800;
+  }
+
+  .metric-tooltip a:hover {
+    text-decoration: underline;
+  }
+
+  .info-item .info-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .info-item .info-value {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 手动校准区 */
+  .calibrate-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+
+  .input-group input {
+    padding: 8px 14px;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.3s;
+    width: 140px;
+  }
+
+  .input-group input:focus { border-color: var(--accent-orange); }
+
+  /* 数据来源说明 */
+  .data-note {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 20px;
+    padding: 12px;
+    background: var(--card);
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+  }
+
+  /* ========== 响应式设计 ========== */
+
+  /* 平板 ≤900px */
+  @media (max-width: 900px) {
+    .strategy-layout, .charts-grid { grid-template-columns: 1fr; }
+    .footer-info { grid-template-columns: repeat(2, 1fr); }
+    .chart-wrapper { height: 240px; }
+  }
+
+  /* 大手机 ≤600px */
+  @media (max-width: 600px) {
+    body { padding: 14px 12px 20px; }
+    .header { margin-bottom: 16px; }
+    .header h1 { font-size: 20px; }
+    .header .subtitle { font-size: 12px; }
+    .header .update-time, .header .status-line { font-size: 11px; }
+    .header .status-line { padding: 6px 10px; }
+
+    /* 操作栏 */
+    .action-bar { justify-content: center; flex-wrap: wrap; gap: 8px; }
+    .action-bar .hint-text { display: none; }
+    .btn { padding: 8px 14px; font-size: 12px; }
+
+    /* 仪表盘 */
+    .gauge-container { min-height: 360px; padding: 26px 0 12px; }
+    .gauge-svg { width: 260px; height: 168px; }
+    .gauge-value { font-size: 48px; }
+    .gauge-label { font-size: 13px; }
+    .gauge-signal { font-size: 18px; padding: 10px 22px; margin-top: 18px; }
+
+    /* 核心指标 */
+    .metrics-grid { grid-template-columns: 1fr; }
+    .footer-info { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .info-item { padding: 12px; border-radius: 14px; }
+    .info-item .info-label { font-size: 10px; }
+    .info-item .info-value { font-size: 16px; }
+
+    /* 策略规则 */
+    .rule-item { padding: 10px; gap: 10px; margin-bottom: 8px; }
+    .rule-icon { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
+    .rule-content .rule-title { font-size: 13px; }
+    .rule-content .rule-desc { font-size: 11px; }
+    .chart-note { font-size: 11px; }
+
+    .backtest-cta { padding: 16px; }
+    .backtest-cta-main { align-items: flex-start; }
+    .backtest-cta-title { font-size: 16px; }
+    .backtest-cta-desc { font-size: 11px; }
+    .backtest-cta-action { align-self: flex-end; }
+
+    /* 图表 */
+    .chart-wrapper { height: 200px; }
+    .charts-grid { gap: 12px; }
+    .card { padding: 16px; border-radius: 12px; }
+    .card-title { font-size: 12px; margin-bottom: 12px; }
+
+    /* 历史表格 */
+    .history-table { font-size: 11px; }
+    .history-table th, .history-table td { padding: 8px 6px; }
+    .history-table th { font-size: 10px; }
+    .tag { font-size: 10px; padding: 2px 8px; }
+
+    /* 校准面板 */
+    .calibrate-section { flex-direction: column; align-items: stretch; gap: 12px; }
+    .input-group input { width: 100%; }
+    .calibrate-section .btn { width: 100%; text-align: center; }
+    .calibrate-section .calib-hint { text-align: center; align-self: center !important; }
+
+    /* Toast */
+    .toast-container { top: 12px; right: 12px; left: 12px; }
+    .toast { max-width: 100%; font-size: 12px; padding: 10px 16px; }
+
+    /* 底部说明 */
+    .data-note { font-size: 10px; padding: 10px; margin-top: 12px; }
+    .dashboard { gap: 12px; }
+  }
+
+  /* 小手机 ≤380px */
+  @media (max-width: 380px) {
+    body { padding: 8px; }
+    .header h1 { font-size: 18px; }
+    .gauge-svg { width: 210px; height: 136px; }
+    .gauge-value { font-size: 30px; }
+    .gauge-signal { font-size: 13px; padding: 6px 16px; }
+    .footer-info { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .info-item { padding: 10px; }
+    .info-item .info-value { font-size: 15px; }
+    .chart-wrapper { height: 170px; }
+  }
+
+  /* 历史数据表格 */
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+  .history-table th {
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--text-dim);
+    font-weight: 500;
+    border-bottom: 1px solid var(--card-border);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .history-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+
+  .history-table tr:hover td { background: rgba(0,0,0,0.02); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .tag-clear { background: rgba(224,72,72,0.08); color: var(--accent-red); }
+  .tag-pause { background: rgba(217,122,11,0.08); color: var(--accent-yellow); }
+  .tag-normal { background: rgba(46,125,209,0.08); color: var(--accent-blue); }
+  .tag-double { background: rgba(13,159,130,0.08); color: var(--accent-green); }
+
+  .tag-heavy-buy   { background: rgba(13,159,130,0.12); color: var(--accent-green); }
+  .tag-buy         { background: rgba(46,125,209,0.10); color: var(--accent-blue); }
+  .tag-stop        { background: rgba(212,160,23,0.12); color: var(--accent-yellow); }
+  .tag-sell        { background: rgba(217,122,11,0.12); color: var(--accent-orange); }
+  .tag-heavy-sell  { background: rgba(224,72,72,0.12);  color: var(--accent-red); }
+
+  /* ========== MA120 模块 ========== */
+
+  .ma120-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .ma120-gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    gap: 12px;
+    padding-top: 22px;
+  }
+
+  /* 偏离度进度条 */
+  .deviation-bar-wrap {
+    width: 100%;
+    max-width: 320px;
+    margin: 8px auto 0;
+  }
+
+  .deviation-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .deviation-bar-track {
+    position: relative;
+    height: 18px;
+    border-radius: 9px;
+    background: linear-gradient(to right,
+      #0d9f82 0%,
+      #2e7dd1 30%,
+      #d4a017 55%,
+      #d97a0b 75%,
+      #e04848 100%
+    );
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  .deviation-bar-marker {
+    position: absolute;
+    top: -4px;
+    width: 6px;
+    height: 26px;
+    background: #1a2332;
+    border-radius: 3px;
+    transform: translateX(-50%);
+    transition: left 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+
+  .deviation-value-row {
+    text-align: center;
+    margin-top: 14px;
+  }
+
+  .deviation-number {
+    font-size: 42px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .deviation-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .ma120-signal {
+    margin-top: 12px;
+    padding: 10px 28px;
+    border-radius: 30px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .ma120-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 24px;
+    width: 100%;
+  }
+
+  .metric-item {
+    position: relative;
+    padding: 18px 20px 16px;
+    border-radius: 18px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,255,0.92));
+    border: 1px solid rgba(220,226,236,0.95);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.88),
+      0 10px 24px rgba(35, 57, 91, 0.06);
+  }
+
+  .metric-item::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: 3px;
+    opacity: 0.85;
+    background: linear-gradient(90deg, rgba(46,125,209,0.55), rgba(46,125,209,0));
+  }
+
+  .metric-item:nth-child(2)::before {
+    background: linear-gradient(90deg, rgba(124,58,237,0.55), rgba(124,58,237,0));
+  }
+
+  .metric-item .label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .metric-item .value {
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.05;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 8px;
+  }
+
+  .metric-item:nth-child(2) .value { color: #7c3aed; }
+
+  .metric-item .sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.45;
+  }
+
+  /* MA120 规则卡 */
+  .ma120-rules-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .ma-rule-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: all 0.3s;
+    border: 1px solid transparent;
+  }
+
+  .ma-rule-item:last-child { margin-bottom: 0; }
+
+  .ma-rule-item.active {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px rgba(0,0,0,0.08);
+  }
+
+  .ma-rule-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+
+  .ma-rule-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .ma-rule-desc  { font-size: 11px; color: var(--text-dim); }
+
+  .ma-heavy-buy  .ma-rule-icon { background: rgba(13,159,130,0.10); color: var(--accent-green); }
+  .ma-heavy-buy.active  { background: var(--zone-heavy-buy); border-color: rgba(13,159,130,0.2); }
+
+  .ma-buy        .ma-rule-icon { background: rgba(46,125,209,0.10); color: var(--accent-blue); }
+  .ma-buy.active        { background: var(--zone-buy);      border-color: rgba(46,125,209,0.2); }
+
+  .ma-stop       .ma-rule-icon { background: rgba(212,160,23,0.10); color: var(--accent-yellow); }
+  .ma-stop.active       { background: var(--zone-stop);     border-color: rgba(212,160,23,0.2); }
+
+  .ma-sell       .ma-rule-icon { background: rgba(217,122,11,0.10); color: var(--accent-orange); }
+  .ma-sell.active       { background: var(--zone-sell);     border-color: rgba(217,122,11,0.2); }
+
+  .ma-heavy-sell .ma-rule-icon { background: rgba(224,72,72,0.10);  color: var(--accent-red); }
+  .ma-heavy-sell.active { background: var(--zone-heavy-sell);border-color: rgba(224,72,72,0.2); }
+
+  /* MA120 图表 */
+  .ma120-chart-wrapper { position: relative; height: 300px; }
+
+  @media (max-width: 900px) {
+    .ma120-section { grid-template-columns: 1fr; }
+    .ma120-chart-wrapper { height: 240px; }
+  }
+
+  @media (max-width: 600px) {
+    .ma120-gauge-container { min-height: 220px; }
+    .deviation-number { font-size: 32px; }
+    .ma120-signal { font-size: 15px; padding: 8px 20px; }
+    .ma-rule-item { padding: 10px; gap: 10px; }
+    .ma-rule-icon { width: 34px; height: 34px; font-size: 16px; }
+    .ma-rule-title { font-size: 12px; }
+    .ma-rule-desc  { font-size: 10px; }
+    .ma120-chart-wrapper { height: 200px; }
+  }
+
+  /* ========== 综合信号卡片 ========== */
+
+  .combined-card {
+    background:
+      radial-gradient(circle at left top, rgba(46,125,209,0.09), transparent 38%),
+      linear-gradient(135deg, rgba(255,255,255,0.98), rgba(247,250,255,0.96));
+    border: 1px solid rgba(46,125,209,0.15);
+    border-radius: 20px;
+    padding: 26px 30px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: center;
+    box-shadow: 0 16px 36px rgba(46,125,209,0.08);
+  }
+
+  /* 左右两侧输入指标 */
+  .combined-input {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .combined-input-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .combined-input-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .combined-input-signal {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* 中间箭头分隔 */
+  /* 右侧综合输出 */
+  .combined-output {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .combined-output-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .combined-signal-badge {
+    font-size: 18px;
+    font-weight: 800;
+    padding: 10px 24px;
+    border-radius: 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .combined-basis {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.5;
+    max-width: 280px;
+  }
+
+  .combined-priority-note {
+    grid-column: 1 / -1;
+    margin-top: -4px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(46,125,209,0.06);
+    border: 1px solid rgba(46,125,209,0.12);
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .combined-priority-note strong {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  /* 底部决策矩阵提示行 */
+  .combined-matrix-hint {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--card-border);
+    padding-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .combined-matrix-hint-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  .matrix-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    opacity: 0.45;
+    transition: opacity 0.3s;
+  }
+
+  .matrix-chip.active {
+    opacity: 1;
+    box-shadow: 0 0 0 2px currentColor;
+  }
+
+  .chip-heavy-buy  { background: rgba(13,159,130,0.12); color: var(--accent-green); }
+  .chip-buy        { background: rgba(46,125,209,0.08); color: var(--accent-blue); }
+  .chip-stop       { background: rgba(212,160,23,0.12); color: var(--accent-yellow); }
+  .chip-sell       { background: rgba(217,122,11,0.10); color: var(--accent-orange); }
+  .chip-heavy-sell { background: rgba(224,72,72,0.10);  color: var(--accent-red); }
+
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,35,50,0.22);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s ease;
+    z-index: 2100;
+  }
+
+  .backtest-drawer {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: min(1240px, calc(100vw - 56px));
+    height: min(88vh, 980px);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,250,255,0.96));
+    border: 1px solid rgba(226,230,237,0.95);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 28px 72px rgba(26,35,50,0.22);
+    transform: translate(-50%, -46%) scale(0.96);
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease;
+    opacity: 0;
+    z-index: 2200;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .drawer-open .drawer-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .drawer-open .backtest-drawer {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+
+  .drawer-open {
+    overflow: hidden;
+  }
+
+  .backtest-drawer-header {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 1;
+  }
+
+  .drawer-close {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(226,230,237,0.95);
+    background: rgba(255,255,255,0.94);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 0;
+    font-size: 0;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(26,35,50,0.12);
+    backdrop-filter: blur(8px);
+  }
+
+  .drawer-close svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+  }
+
+  .backtest-drawer-body {
+    flex: 1;
+    padding: 0;
+    background: rgba(244,246,249,0.72);
+  }
+
+  .backtest-drawer-frame {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    background: #fff;
+  }
+
+  @media (max-width: 700px) {
+    .combined-card {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .combined-output { align-items: flex-start; }
+    .combined-basis { text-align: left; max-width: 100%; }
+    .combined-signal-badge { font-size: 16px; padding: 8px 18px; }
+    .combined-input-value { font-size: 24px; }
+    .backtest-drawer {
+      width: calc(100vw - 20px);
+      height: calc(100vh - 20px);
+      border-radius: 20px;
+    }
+    .backtest-drawer-header { top: 12px; right: 12px; }
+  }
+
+  /* 分隔标题 */
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 0;
+  }
+
+  .section-divider h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--card-border);
+  }
+
+
+  .loading-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(244,246,249,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .loading-overlay.active { opacity: 1; pointer-events: auto; }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(0,0,0,0.08);
+    border-top-color: var(--accent-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .loading-text {
+    margin-top: 12px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast 通知 */
+  .toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .toast {
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: slideIn 0.3s ease-out;
+    max-width: 320px;
+  }
+
+  .toast-success { background: rgba(13,159,130,0.1); color: var(--accent-green); border: 1px solid rgba(13,159,130,0.2); }
+  .toast-error { background: rgba(224,72,72,0.1); color: var(--accent-red); border: 1px solid rgba(224,72,72,0.2); }
+  .toast-info { background: rgba(46,125,209,0.1); color: var(--accent-blue); border: 1px solid rgba(46,125,209,0.2); }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 加载动画 -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">正在从东方财富获取实时数据...</div>
+</div>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="drawer-scrim" id="backtestDrawerScrim" onclick="closeBacktestDrawer()"></div>
+<aside class="backtest-drawer" id="backtestDrawer" aria-hidden="true">
+  <div class="backtest-drawer-header">
+    <button class="drawer-close" type="button" onclick="closeBacktestDrawer()" aria-label="关闭回测抽屉">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6 6 18"/>
+      </svg>
+    </button>
+  </div>
+  <div class="backtest-drawer-body">
+    <iframe class="backtest-drawer-frame" id="backtestDrawerFrame" title="历史回测验证报告" loading="lazy"></iframe>
+  </div>
+</aside>
+
+<div class="header">
+  <h1>红利低波100 · 息差监控看板</h1>
+  <div class="subtitle">TTM股息率 − 十年期国债利率 = 息差信号</div>
+  <div class="update-time" id="updateTime">正在加载数据...</div>
+  <div class="status-line" id="statusLine"></div>
+</div>
+
+<div class="dashboard">
+  <!-- 操作栏 -->
+  <div class="card toolbar-card">
+    <div class="action-bar">
+      <span class="hint-text" style="font-size: 12px; color: var(--text-dim); margin-right: auto;">
+        打开页面即获取最新数据，股息率优先按日自动更新
+      </span>
+      <button class="btn btn-secondary" id="btnClearHistory" onclick="clearHistory()">🗑️ 清除历史</button>
+      <button class="btn btn-calibrate" onclick="toggleCalibrate()">⚙️ 校准股息率</button>
+      <button class="btn btn-primary" id="btnFetch" onclick="manualFetch()">🔄 刷新数据</button>
+    </div>
+    <!-- 校准面板（默认隐藏） -->
+    <div id="calibratePanel" style="display:none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+      <div class="calibrate-section">
+        <div class="input-group">
+          <label>手动覆盖 TTM 股息率 (%)</label>
+          <input type="number" step="0.01" id="calibrateInput" placeholder="例：4.50">
+        </div>
+        <button class="btn btn-calibrate" onclick="calibrateDividend()">确认校准</button>
+        <span class="calib-hint" style="font-size: 11px; color: var(--text-dim); align-self: end; padding-bottom: 8px;">
+          日常优先自动拉取最新股息率；当源延迟或调仓后需要覆盖时，再手动校准
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 核心指标 -->
+  <div class="footer-info">
+    <div class="info-item" id="dividendInfoItem">
+      <div class="info-label">TTM股息率</div>
+      <div class="info-value" id="dividendDisplay" style="color: var(--accent-green);">--</div>
+      <div class="metric-tooltip" id="dividendTooltip" role="tooltip"></div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">十年期国债利率</div>
+      <div class="info-value" id="bondDisplay" style="color: var(--accent-yellow);">--</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">当前息差</div>
+      <div class="info-value" id="spreadDisplay" style="color: var(--accent-blue);">--</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">指数点位</div>
+      <div class="info-value" id="indexDisplay" style="color: var(--text);">--</div>
+    </div>
+  </div>
+
+  <!-- ======================== 综合信号 ======================== -->
+  <div class="section-divider"><h2>🧭 综合操作信号</h2></div>
+
+  <div class="combined-card" id="combinedCard">
+    <!-- 左：息差指标 -->
+    <div class="combined-input">
+      <div class="combined-input-label">息差信号（估值锚）</div>
+      <div class="combined-input-value" id="cmbSpreadValue" style="color:var(--accent-blue)">--</div>
+      <div class="combined-input-signal" id="cmbSpreadSignal">等待数据</div>
+    </div>
+
+    <!-- 右：综合输出 -->
+    <div class="combined-output">
+      <div class="combined-output-label">最终操作建议</div>
+      <div class="combined-signal-badge signal-normal" id="cmbFinalBadge">等待数据</div>
+      <div class="combined-basis" id="cmbBasis">等待两组数据就绪后生成...</div>
+    </div>
+
+    <div class="combined-priority-note">
+      <strong>冲突时怎么看：</strong>息差负责判断估值方向，MA120负责调节执行节奏。
+      当息差偏便宜但价格高于均线时，通常先从“加仓/定投”降为“暂停”；
+      只有同时出现低息差和高于均线，才进入减仓或清仓。
+    </div>
+
+    <!-- 底部五档全景 -->
+    <div class="combined-matrix-hint">
+      <span class="combined-matrix-hint-label">操作档位：</span>
+      <span class="matrix-chip chip-heavy-buy"  id="chip0">🚀 重仓加仓</span>
+      <span class="matrix-chip chip-buy"         id="chip1">📈 持续定投</span>
+      <span class="matrix-chip chip-stop"        id="chip2">⏸️ 停止定投</span>
+      <span class="matrix-chip chip-sell"        id="chip3">⚠️ 卖出部分</span>
+      <span class="matrix-chip chip-heavy-sell"  id="chip4">🚨 大量卖出</span>
+    </div>
+  </div>
+
+  <!-- 仪表盘 + 执行规则 / 研究验证 -->
+  <div class="strategy-layout">
+    <div class="card signal-stage-card">
+      <div class="card-title">当前息差信号</div>
+      <div class="gauge-container">
+        <svg class="gauge-svg" viewBox="0 0 280 180">
+          <!-- 清仓区 <1 -->
+          <path d="M 30 150 A 110 110 0 0 1 87.4 52.2" fill="none" stroke="rgba(224,72,72,0.18)" stroke-width="24" stroke-linecap="round"/>
+          <!-- 暂停定投区 1-2 -->
+          <path d="M 87.4 52.2 A 110 110 0 0 1 168.7 44.1" fill="none" stroke="rgba(217,122,11,0.18)" stroke-width="24" stroke-linecap="round"/>
+          <!-- 正常定投区 2-3 -->
+          <path d="M 168.7 44.1 A 110 110 0 0 1 250 150" fill="none" stroke="rgba(46,125,209,0.18)" stroke-width="24" stroke-linecap="round"/>
+          <!-- 刻度标记 -->
+          <text x="20" y="170" fill="#6b7a90" font-size="10">0</text>
+          <text x="68" y="38" fill="#6b7a90" font-size="10">1</text>
+          <text x="152" y="30" fill="#6b7a90" font-size="10">2</text>
+          <text x="228" y="38" fill="#6b7a90" font-size="10">3</text>
+          <text x="238" y="170" fill="#6b7a90" font-size="10">5</text>
+          <!-- 指针 -->
+          <line id="gaugeNeedle" x1="140" y1="150" x2="140" y2="60" stroke="#1a2332" stroke-width="3" stroke-linecap="round" transform="rotate(0, 140, 150)"/>
+          <circle cx="140" cy="150" r="8" fill="#e2e6ed" stroke="#1a2332" stroke-width="2"/>
+        </svg>
+        <div class="gauge-value blue" id="spreadValue">--</div>
+        <div class="gauge-label">息差（股息率 − 国债利率）</div>
+        <div class="gauge-signal signal-normal" id="signalBadge">等待数据</div>
+      </div>
+    </div>
+
+    <div class="strategy-side">
+      <div class="card rules-card">
+        <div class="card-kicker">执行规则</div>
+        <div class="rule-item rule-clear" id="ruleClear">
+          <div class="rule-icon">🚨</div>
+          <div class="rule-content">
+            <div class="rule-title">清仓离场</div>
+            <div class="rule-desc">息差 < 1.0% → 股息优势消失，估值偏贵</div>
+          </div>
+        </div>
+        <div class="rule-item rule-normal" id="rulePause">
+          <div class="rule-icon">⏸️</div>
+          <div class="rule-content">
+            <div class="rule-title">暂停定投</div>
+            <div class="rule-desc">1.0% ≤ 息差 < 2.0% → 风险补偿偏低，暂停买入观望</div>
+          </div>
+        </div>
+        <div class="rule-item rule-normal" id="ruleNormal">
+          <div class="rule-icon">📊</div>
+          <div class="rule-content">
+            <div class="rule-title">正常定投</div>
+            <div class="rule-desc">2.0% ≤ 息差 < 3.0% → 稳定风险补偿，按计划定投</div>
+          </div>
+        </div>
+        <div class="rule-item rule-double" id="ruleDouble">
+          <div class="rule-icon">🚀</div>
+          <div class="rule-content">
+            <div class="rule-title">双倍定投</div>
+            <div class="rule-desc">息差 ≥ 3.0% → 极度便宜，加大下注捡筹码</div>
+          </div>
+        </div>
+        <div class="rule-item" style="background: rgba(0,0,0,0.02); margin-top: 8px;">
+          <div class="rule-icon" style="background: rgba(217,122,11,0.08); color: var(--accent-orange);">🔄</div>
+          <div class="rule-content">
+            <div class="rule-title">分红再投入</div>
+            <div class="rule-desc">一年4次分红，当天全部再投入</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-kicker">研究验证</div>
+        <button class="backtest-cta" type="button" title="查看历史回测数据" onclick="openBacktestDrawer('backtest.html?embedded=1')">
+          <div class="backtest-cta-main">
+            <div class="backtest-cta-badge">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+            </div>
+            <div>
+              <div class="backtest-cta-title">历史回测验证</div>
+              <div class="backtest-cta-desc">基于 2017–2026 年真实数据，验证息差阈值与 MA120 策略的统计效果，包含散点图、分层统计与阈值建议。</div>
+            </div>
+          </div>
+          <div class="backtest-cta-action">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            查看
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图表区域 -->
+  <div class="charts-grid">
+    <div class="card">
+      <div class="card-title">息差趋势</div>
+      <div class="chart-note">观察最近一段时间风险补偿是继续走阔还是开始回落，帮助判断当前信号是在强化还是钝化。</div>
+      <div class="chart-wrapper">
+        <canvas id="spreadChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">股息率 vs 国债利率</div>
+      <div class="chart-note">把分子和分母拆开看，区分“息差变大”到底来自股息率抬升，还是国债利率下行。</div>
+      <div class="chart-wrapper">
+        <canvas id="rateChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MA120 均线监控模块 ======================== -->
+  <div class="section-divider"><h2>📈 红利指数 MA120 均线监控</h2></div>
+
+  <!-- MA120 仪表盘 + 规则 -->
+  <div class="ma120-section">
+    <div class="card">
+      <div class="card-title">当前偏离 MA120 均线</div>
+      <div class="ma120-gauge-container">
+        <!-- 偏离度进度条 -->
+        <div class="deviation-bar-wrap">
+          <div class="deviation-bar-labels">
+            <span>−30%</span>
+            <span>−20%</span>
+            <span>0%</span>
+            <span>+10%</span>
+            <span>+20%</span>
+            <span>+30%</span>
+          </div>
+          <div class="deviation-bar-track">
+            <div class="deviation-bar-marker" id="deviationMarker" style="left:50%;"></div>
+          </div>
+        </div>
+
+        <!-- 偏离值 + 信号 -->
+        <div class="deviation-value-row">
+          <div class="deviation-number" id="deviationNumber" style="color:var(--accent-blue);">--</div>
+          <div class="deviation-label">相对 MA120 偏离度</div>
+        </div>
+        <div class="ma120-signal signal-normal" id="ma120SignalBadge">等待数据</div>
+
+        <!-- 点位指标 -->
+        <div class="ma120-metrics">
+          <div class="metric-item">
+            <div class="label">当前指数点位</div>
+            <div class="value" id="ma120CurrentPoint">--</div>
+            <div class="sub">实时行情</div>
+          </div>
+          <div class="metric-item">
+            <div class="label">MA120 均线</div>
+            <div class="value" id="ma120Value">--</div>
+            <div class="sub" id="ma120Sub">120日均线</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MA120 策略规则 -->
+    <div class="card ma120-rules-card">
+      <div class="card-title">MA120 操作策略</div>
+      <div class="ma-rule-item ma-heavy-buy" id="maRuleHeavyBuy">
+        <div class="ma-rule-icon">🚀</div>
+        <div class="ma-rule-content">
+          <div class="ma-rule-title">大量加仓</div>
+          <div class="ma-rule-desc">低于 MA120 超过 20% → 极度低估，重仓买入</div>
+        </div>
+      </div>
+      <div class="ma-rule-item ma-buy" id="maRuleBuy">
+        <div class="ma-rule-icon">📈</div>
+        <div class="ma-rule-content">
+          <div class="ma-rule-title">持续定投</div>
+          <div class="ma-rule-desc">低于或持平 MA120 → 估值合理偏低，按计划定投</div>
+        </div>
+      </div>
+      <div class="ma-rule-item ma-stop" id="maRuleStop">
+        <div class="ma-rule-icon">⏸️</div>
+        <div class="ma-rule-content">
+          <div class="ma-rule-title">停止定投</div>
+          <div class="ma-rule-desc">超过 MA120 → 估值偏贵，暂停买入观望</div>
+        </div>
+      </div>
+      <div class="ma-rule-item ma-sell" id="maRuleSell">
+        <div class="ma-rule-icon">⚠️</div>
+        <div class="ma-rule-content">
+          <div class="ma-rule-title">卖出部分</div>
+          <div class="ma-rule-desc">超过 MA120 的 10% → 高估，减持部分仓位</div>
+        </div>
+      </div>
+      <div class="ma-rule-item ma-heavy-sell" id="maRuleHeavySell">
+        <div class="ma-rule-icon">🚨</div>
+        <div class="ma-rule-content">
+          <div class="ma-rule-title">大量卖出 / 清仓</div>
+          <div class="ma-rule-desc">超过 MA120 的 20% → 严重高估，大幅减仓甚至清仓</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MA120 走势图 -->
+  <div class="card">
+    <div class="card-title">红利低波100 指数走势 vs MA120 均线</div>
+    <div class="ma120-chart-wrapper">
+      <canvas id="ma120Chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ======================== 原有历史记录 ======================== -->
+
+  <div class="card">
+    <div class="card-title">息差历史记录</div>
+    <div style="overflow-x: auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>股息率</th>
+            <th>国债利率</th>
+            <th>息差</th>
+            <th>信号</th>
+            <th>指数点位</th>
+            <th>涨跌幅</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="data-note">
+  数据来源：东方财富（国债收益率、指数行情） · 当前股息率优先取理杏仁日更值，失败时回退手动校准 · 历史数据存储在浏览器本地
+</div>
+
+<script>
+// ========== 配置 ==========
+const STORAGE_KEY = 'hldiv100_spread_records';
+const CONFIG_KEY = 'hldiv100_config';
+const MA120_STORAGE_KEY = 'hldiv100_ma120_cache';
+
+// 默认配置：与原 fetch.js 一致
+const DEFAULT_CONFIG = {
+  totalDividendPerIndex: 518.43,  // TTM总分红/指数单位
+  lastKnownIndex: 11890.68,       // 基准指数点位
+  lastKnownYield: 4.36,           // 基准股息率（理杏仁 2026-04-02）
+  calibDate: null,
+  autoDividendDate: null,
+  autoDividendYield: null,
+};
+
+let spreadChart = null;
+let rateChart = null;
+let ma120Chart = null;
+
+// ========== Toast 通知 ==========
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ========== 加载状态 ==========
+function setLoading(show, text) {
+  const overlay = document.getElementById('loadingOverlay');
+  const loadingText = document.getElementById('loadingText');
+  overlay.classList.toggle('active', show);
+  if (text) loadingText.textContent = text;
+}
+
+function openBacktestDrawer(src) {
+  const frame = document.getElementById('backtestDrawerFrame');
+  const drawer = document.getElementById('backtestDrawer');
+  if (frame && frame.dataset.src !== src) {
+    frame.src = src;
+    frame.dataset.src = src;
+  }
+  document.body.classList.add('drawer-open');
+  if (drawer) drawer.setAttribute('aria-hidden', 'false');
+}
+
+function closeBacktestDrawer() {
+  const drawer = document.getElementById('backtestDrawer');
+  document.body.classList.remove('drawer-open');
+  if (drawer) drawer.setAttribute('aria-hidden', 'true');
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeBacktestDrawer();
+  }
+});
+
+// ========== 本地存储 ==========
+function loadRecords() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveRecords(records) {
+  // 最多保留365条
+  while (records.length > 365) records.shift();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    return raw ? { ...DEFAULT_CONFIG, ...JSON.parse(raw) } : { ...DEFAULT_CONFIG };
+  } catch { return { ...DEFAULT_CONFIG }; }
+}
+
+function saveConfig(config) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+function normalizeIndexChangePct(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  if (num !== 0 && Math.abs(num) <= 1) return num * 100;
+  if (Math.abs(num) > 20) return num / 100;
+  return num;
+}
+
+function destroyChart(chart) {
+  if (chart && typeof chart.destroy === 'function') {
+    chart.destroy();
+  }
+}
+
+function resetAllCharts() {
+  destroyChart(spreadChart);
+  destroyChart(rateChart);
+  destroyChart(ma120Chart);
+  spreadChart = null;
+  rateChart = null;
+  ma120Chart = null;
+}
+
+// ========== API 代理调用（走 Vercel Serverless Functions）==========
+
+async function fetchAPI(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
+}
+
+/**
+ * 获取十年期国债收益率
+ */
+async function fetchBondYield() {
+  const data = await fetchAPI('/api/bond');
+  return { date: data.date, yieldPct: data.yieldPct };
+}
+
+/**
+ * 获取红利低波100指数实时数据
+ */
+async function fetchIndexData() {
+  return await fetchAPI('/api/index');
+}
+
+/**
+ * 获取最新股息率（日更，优先来源：理杏仁）
+ */
+async function fetchDividendYield() {
+  return await fetchAPI('/api/dividend');
+}
+
+/**
+ * 获取最近交易日日期
+ */
+async function fetchTradeDate() {
+  try {
+    const data = await fetchAPI('/api/tradedate');
+    return data.date || new Date().toISOString().slice(0, 10);
+  } catch {
+    return new Date().toISOString().slice(0, 10); // fallback：今天
+  }
+}
+
+/**
+ * 获取近 N 天历史息差（用于图表）
+ */
+async function fetchHistory(days = 30) {
+  const data = await fetchAPI('/api/history?days=' + days);
+
+  const config = loadConfig();
+  const results = [];
+  data.results.forEach(item => {
+    const divYield = (config.totalDividendPerIndex / item.indexClose) * 100;
+    const spread = Math.round((divYield - item.bondYield) * 100) / 100;
+    let signal;
+    if (spread < 1) signal = '清仓';
+    else if (spread >= 3) signal = '双倍定投';
+    else if (spread >= 2) signal = '正常定投';
+    else signal = '暂停定投';
+
+    results.push({
+      date: item.date,
+      dividendYield: Math.round(divYield * 100) / 100,
+      bondYield: item.bondYield,
+      spread,
+      signal,
+      indexPoint: item.indexClose,
+    });
+  });
+
+  return results;
+}
+
+
+// ========== 核心数据抓取逻辑 ==========
+
+async function fetchAllData() {
+  setLoading(true, '正在获取最新股息率与市场数据...');
+
+  const [bondData, indexData, tradeDate, ma120Data, dividendData] = await Promise.allSettled([
+    fetchBondYield(),
+    fetchIndexData(),
+    fetchTradeDate(),
+    getMA120Data(),
+    fetchDividendYield(),
+  ]).then(results => results.map(r =>
+    r.status === 'fulfilled' ? r.value : null
+  ));
+
+  const config = loadConfig();
+
+  // 必需数据校验
+  if (!bondData || !indexData) {
+    setLoading(false);
+    throw new Error('核心数据缺失（国债或指数数据获取失败），请刷新重试');
+  }
+
+  const hasAutoDividend = dividendData && Number.isFinite(Number(dividendData.yieldPct));
+  const dividendYield = hasAutoDividend
+    ? Math.round(Number(dividendData.yieldPct) * 100) / 100
+    : Math.round((config.totalDividendPerIndex / indexData.current) * 10000) / 100;
+  const spread = Math.round((dividendYield - bondData.yieldPct) * 100) / 100;
+  let signal;
+  if (spread < 1) signal = '清仓';
+  else if (spread >= 3) signal = '双倍定投';
+  else if (spread >= 2) signal = '正常定投';
+  else signal = '暂停定投';
+
+  config.lastKnownIndex = indexData.current;
+  config.lastKnownYield = dividendYield;
+  if (hasAutoDividend) {
+    config.autoDividendDate = dividendData.date || tradeDate;
+    config.autoDividendYield = dividendYield;
+  }
+  saveConfig(config);
+
+  const record = {
+    date: tradeDate,
+    dividendYield,
+    bondYield: bondData.yieldPct,
+    spread,
+    signal,
+    indexPoint: indexData.current,
+    indexChangePct: normalizeIndexChangePct(indexData.changePct),
+    dividendDate: hasAutoDividend ? (dividendData.date || tradeDate) : (config.calibDate ? config.calibDate.slice(0, 10) : null),
+    dividendSource: hasAutoDividend ? 'lixinger' : 'manual',
+    dividendMetricType: hasAutoDividend ? (dividendData.metricType || '市值加权') : '手动覆盖',
+    dividendSourceUrl: hasAutoDividend ? (dividendData.sourceUrl || '') : '',
+    fetchTime: new Date().toISOString(),
+  };
+
+  // 保存到 localStorage
+  const records = loadRecords();
+  const existIdx = records.findIndex(r => r.date === tradeDate);
+  if (existIdx >= 0) {
+    records[existIdx] = record;
+  } else {
+    records.push(record);
+  }
+  records.sort((a, b) => a.date.localeCompare(b.date));
+  saveRecords(records);
+
+  setLoading(false);
+  return { records, lastRecord: record, config, ma120Data, currentPoint: indexData.current };
+}
+
+// ========== 综合信号逻辑 ==========
+
+/**
+ * 联合决策矩阵
+ * 第一层：息差（宏观估值锚）决定"基础态势"
+ * 第二层：MA120（价格位置）调节执行节奏
+ *
+ * @param {number} spread     当前息差（%）
+ * @param {number|null} deviation  当前 MA120 偏离度（%），null=数据缺失
+ */
+function getCombinedSignal(spread, deviation) {
+  // ---------- 息差档位 ----------
+  let spreadTier;   // 'cheap' | 'normal' | 'expensive'
+  let spreadLabel;
+  if (spread >= 3) {
+    spreadTier  = 'cheap';
+    spreadLabel = '双倍定投区（息差≥3%）';
+  } else if (spread >= 2) {
+    spreadTier  = 'normal';
+    spreadLabel = '正常定投区（2%≤息差<3%）';
+  } else if (spread >= 1) {
+    spreadTier  = 'pause';
+    spreadLabel = '暂停定投区（1%≤息差<2%）';
+  } else {
+    spreadTier  = 'expensive';
+    spreadLabel = '清仓区（息差<1%）';
+  }
+
+  // ---------- MA120 档位 ----------
+  let maTier;   // 'heavyBuy'|'buy'|'stop'|'sell'|'heavySell'|'unknown'
+  if (deviation === null || deviation === undefined) {
+    maTier = 'unknown';
+  } else if (deviation <= -20) {
+    maTier = 'heavyBuy';
+  } else if (deviation < 0) {
+    maTier = 'buy';
+  } else if (deviation < 10) {
+    maTier = 'stop';
+  } else if (deviation < 20) {
+    maTier = 'sell';
+  } else {
+    maTier = 'heavySell';
+  }
+
+  // ---------- 联合决策矩阵 ----------
+  //   rows = spreadTier, cols = maTier
+  //   结果: { level: 0-4, label, emoji, cls, basis }
+  //   level: 0=重仓买 1=定投 2=停止 3=卖部分 4=大量卖
+  const MATRIX = {
+    cheap: {
+      heavyBuy:  { level: 0, label: '重仓加仓',  emoji: '🚀', cls: 'signal-double',  basis: '估值极便宜 + 价格大幅低于均线，是双重买入信号，建议重仓加仓。' },
+      buy:       { level: 0, label: '重仓加仓',  emoji: '🚀', cls: 'signal-double',  basis: '估值极便宜 + 价格低于均线，双重低估，建议大力加仓。' },
+      stop:      { level: 1, label: '持续定投',  emoji: '📈', cls: 'signal-normal',  basis: '估值极便宜，但价格已回到均线附近，维持定投节奏，不急于加仓。' },
+      sell:      { level: 1, label: '持续定投',  emoji: '📈', cls: 'signal-normal',  basis: '息差仍极高，即便价格偏高也说明底层估值便宜，维持定投，暂不卖出。' },
+      heavySell: { level: 2, label: '停止定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '价格已高于均线20%+，即便息差高也需暂停加仓，等待回落。' },
+      unknown:   { level: 1, label: '持续定投',  emoji: '📈', cls: 'signal-normal',  basis: '息差极高，估值便宜，MA120数据暂缺，按息差主信号定投。' },
+    },
+    normal: {
+      heavyBuy:  { level: 0, label: '加倍定投',  emoji: '💪', cls: 'signal-double',  basis: '估值合理 + 价格大幅低于均线，是加倍定投的好时机。' },
+      buy:       { level: 1, label: '持续定投',  emoji: '📈', cls: 'signal-normal',  basis: '估值合理 + 价格低于均线，正常定投区间。' },
+      stop:      { level: 2, label: '停止定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差处于正常区间，但价格已超过均线，暂停定投，观望为主。' },
+      sell:      { level: 3, label: '卖出部分',  emoji: '⚠️', cls: 'signal-sell',   basis: '价格高于均线10%+，估值开始偏贵，建议减持部分仓位。' },
+      heavySell: { level: 4, label: '大量卖出',  emoji: '🚨', cls: 'signal-clear',  basis: '价格大幅高于均线，估值偏高，建议大量减仓。' },
+      unknown:   { level: 1, label: '持续定投',  emoji: '📈', cls: 'signal-normal',  basis: '息差正常（2-3%），MA120数据暂缺，按息差主信号定投。' },
+    },
+    pause: {
+      heavyBuy:  { level: 2, label: '暂停定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差偏低（1-2%），风险补偿不足，即便价格低于均线也暂停定投，等待息差回升。' },
+      buy:       { level: 2, label: '暂停定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差偏低（1-2%），股息优势偏弱，暂停定投，观望为主。' },
+      stop:      { level: 2, label: '暂停定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差偏低且价格已在均线附近，双重谨慎信号，暂停定投。' },
+      sell:      { level: 3, label: '卖出部分',  emoji: '⚠️', cls: 'signal-sell',   basis: '息差偏低 + 价格偏高，建议减持部分仓位。' },
+      heavySell: { level: 4, label: '大量卖出',  emoji: '🚨', cls: 'signal-clear',  basis: '息差偏低 + 价格严重高于均线，建议大量减仓。' },
+      unknown:   { level: 2, label: '暂停定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差偏低（1-2%），风险补偿不足，暂停定投。MA120数据暂缺。' },
+    },
+    expensive: {
+      heavyBuy:  { level: 2, label: '小额定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差偏低（估值偏贵），即便价格低于均线，也仅维持小额定投。' },
+      buy:       { level: 2, label: '停止定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差过低，股息优势消失，暂停定投。' },
+      stop:      { level: 2, label: '停止定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差过低且价格在均线附近偏高，停止定投。' },
+      sell:      { level: 3, label: '卖出部分',  emoji: '⚠️', cls: 'signal-sell',   basis: '息差极低 + 价格偏高，双重贵信号，建议卖出部分。' },
+      heavySell: { level: 4, label: '清仓离场',  emoji: '🚨', cls: 'signal-clear',  basis: '息差过低（股息优势消失）+ 价格严重高于均线，双重贵信号，建议清仓。' },
+      unknown:   { level: 2, label: '停止定投',  emoji: '⏸️', cls: 'signal-stop',   basis: '息差极低，股息优势消失，停止定投。MA120数据暂缺。' },
+    },
+  };
+
+  const result = MATRIX[spreadTier][maTier];
+  return {
+    ...result,
+    spreadLabel,
+    maLabel: maTier === 'unknown' ? 'MA120数据暂缺' :
+             maTier === 'heavyBuy'  ? `低于均线 ${Math.abs(deviation).toFixed(1)}%（极低估）` :
+             maTier === 'buy'       ? `低于均线 ${Math.abs(deviation).toFixed(1)}%` :
+             maTier === 'stop'      ? `高于均线 ${deviation.toFixed(1)}%（轻微偏高）` :
+             maTier === 'sell'      ? `高于均线 ${deviation.toFixed(1)}%（偏高）` :
+                                      `高于均线 ${deviation.toFixed(1)}%（严重偏高）`,
+  };
+}
+
+/** 更新综合信号卡片 UI */
+function updateCombinedSignalUI(spread, deviation) {
+  if (spread == null) {
+    document.getElementById('cmbSpreadValue').textContent = '—';
+    document.getElementById('cmbSpreadSignal').textContent = '暂无数据';
+    const maEmpty = document.getElementById('cmbBridgeText');
+    const maSignalEmpty = document.getElementById('cmbMaSignal');
+    if (maEmpty) maEmpty.textContent = '—';
+    if (maSignalEmpty) maSignalEmpty.textContent = '均线数据待更新';
+    document.getElementById('cmbFinalBadge').textContent = '⏳ 数据加载中';
+    document.getElementById('cmbBasis').textContent = '等待数据更新...';
+    return;
+  }
+  const sig = getCombinedSignal(spread, deviation);
+
+  // 左侧息差
+  const spreadEl = document.getElementById('cmbSpreadValue');
+  spreadEl.textContent = spread.toFixed(2) + '%';
+  spreadEl.style.color = spread >= 3 ? 'var(--accent-green)'
+                       : spread >= 1 ? 'var(--accent-blue)'
+                                     : 'var(--accent-red)';
+  document.getElementById('cmbSpreadSignal').textContent = sig.spreadLabel;
+
+  // 右侧综合输出
+  const badge = document.getElementById('cmbFinalBadge');
+  badge.className = 'combined-signal-badge ' + sig.cls;
+  badge.textContent = sig.emoji + ' ' + sig.label;
+
+  const basisEl = document.getElementById('cmbBasis');
+  const spreadSummary = spread >= 3 ? '估值明显偏便宜' : spread >= 1 ? '估值处于常规区间' : '估值已偏贵';
+  const maSummary = deviation == null || deviation === undefined
+    ? ''
+    : deviation < 0
+      ? '价格位于MA120均线下方'
+      : '价格位于MA120均线上方';
+  basisEl.textContent = maSummary ? `${spreadSummary}，${maSummary}` : spreadSummary;
+
+  // 五档 chip 高亮
+  ['chip0','chip1','chip2','chip3','chip4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.toggle('active', i === sig.level);
+  });
+}
+
+
+
+// ========== MA120 工具函数 ==========
+
+/** 读取 MA120 缓存 */
+function loadMA120Cache() {
+  try {
+    const raw = localStorage.getItem(MA120_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+/** 保存 MA120 缓存 */
+function saveMA120Cache(data) {
+  localStorage.setItem(MA120_STORAGE_KEY, JSON.stringify(data));
+}
+
+/**
+ * 获取红利低波100 近 200 天 K线（用于计算 MA120）
+ * 需要拉取 ~180 条才能算出 MA120（最少120条）
+ */
+async function fetchMA120Data() {
+  // 拉取从 2 年前到今天的日 K 线，确保超过 120 个交易日
+  const today = new Date();
+  const twoYearsAgo = new Date(today);
+  twoYearsAgo.setFullYear(today.getFullYear() - 2);
+  const beg = twoYearsAgo.toISOString().slice(0,10).replace(/-/g,'');
+  const end = today.toISOString().slice(0,10).replace(/-/g,'');
+  const data = await fetchAPI('/api/kline?secid=2.930955&beg=' + beg + '&end=' + end);
+  if (!data.data || !data.data.klines || data.data.klines.length < 10) {
+    throw new Error('MA120 历史K线数据不足（仅' + (data.data?.klines?.length||0) + '条）');
+  }
+
+  const klines = data.data.klines.map(k => {
+    const p = k.split(',');
+    return { date: p[0], close: parseFloat(p[2]) };
+  });
+
+  // 计算每日 MA120（滚动平均）
+  const result = [];
+  for (let i = 0; i < klines.length; i++) {
+    if (i < 119) {
+      result.push({ ...klines[i], ma120: null });
+    } else {
+      const slice = klines.slice(i - 119, i + 1);
+      const avg = slice.reduce((s, v) => s + v.close, 0) / 120;
+      result.push({ ...klines[i], ma120: Math.round(avg * 100) / 100 });
+    }
+  }
+
+  // 缓存到 localStorage（带时间戳，避免频繁重算）
+  const cacheObj = { ts: Date.now(), data: result };
+  saveMA120Cache(cacheObj);
+
+  return result;
+}
+
+/**
+ * 获取 MA120 数据（优先用缓存，超过 4 小时则重新拉取）
+ */
+async function getMA120Data() {
+  const cache = loadMA120Cache();
+  if (cache && (Date.now() - cache.ts) < 4 * 3600 * 1000) {
+    // 验证缓存有效：需要有足够的 MA120 数据点
+    const validCount = cache.data.filter(d => d.ma120 != null).length;
+    if (validCount >= 10) return cache.data;
+    // 缓存无效，清除并重新拉取
+    localStorage.removeItem(MA120_STORAGE_KEY);
+  }
+  return await fetchMA120Data();
+}
+
+/**
+ * 根据偏离度计算信号
+ * @param {number} deviation 偏离百分比（正=高于均线）
+ */
+function getMA120Signal(deviation) {
+  if (deviation >= 20) return {
+    id: 'maRuleHeavySell',
+    label: '大量卖出 / 清仓',
+    badgeCls: 'signal-clear',
+    colorStyle: 'color:var(--accent-red)',
+    tagCls: 'tag-heavy-sell',
+    emoji: '🚨',
+  };
+  if (deviation >= 10) return {
+    id: 'maRuleSell',
+    label: '卖出部分',
+    badgeCls: 'signal-sell',
+    colorStyle: 'color:var(--accent-orange)',
+    tagCls: 'tag-sell',
+    emoji: '⚠️',
+  };
+  if (deviation > 0) return {
+    id: 'maRuleStop',
+    label: '停止定投',
+    badgeCls: 'signal-stop',
+    colorStyle: 'color:var(--accent-yellow)',
+    tagCls: 'tag-stop',
+    emoji: '⏸️',
+  };
+  if (deviation >= -20) return {
+    id: 'maRuleBuy',
+    label: '持续定投',
+    badgeCls: 'signal-normal',
+    colorStyle: 'color:var(--accent-blue)',
+    tagCls: 'tag-buy',
+    emoji: '📈',
+  };
+  return {
+    id: 'maRuleHeavyBuy',
+    label: '大量加仓',
+    badgeCls: 'signal-double',
+    colorStyle: 'color:var(--accent-green)',
+    tagCls: 'tag-heavy-buy',
+    emoji: '🚀',
+  };
+}
+
+/**
+ * 将偏离度（约 -30%~+30%）映射为进度条百分比（0~100%）
+ */
+function deviationToBarPct(deviation) {
+  const clamped = Math.max(-30, Math.min(30, deviation));
+  return ((clamped + 30) / 60) * 100;
+}
+
+/**
+ * 更新 MA120 模块的 UI
+ */
+function updateMA120UI(ma120Data, currentPoint) {
+  if (!ma120Data || ma120Data.length === 0) {
+    document.getElementById('ma120SignalBadge').textContent = '均线数据不足（需120天历史）';
+    return null;
+  }
+  const latest = ma120Data[ma120Data.length - 1];
+  const ma120 = latest?.ma120;
+
+  if (!ma120 || !currentPoint) {
+    document.getElementById('ma120SignalBadge').textContent = '均线数据不足（需120天历史）';
+    return null;
+  }
+
+  const deviation = ((currentPoint - ma120) / ma120) * 100;
+  const deviationRounded = Math.round(deviation * 100) / 100;
+  const signal = getMA120Signal(deviationRounded);
+
+  // 偏离数字
+  const numEl = document.getElementById('deviationNumber');
+  numEl.style.cssText = signal.colorStyle + ';font-size:42px;font-weight:800;line-height:1;';
+  numEl.textContent = (deviationRounded >= 0 ? '+' : '') + deviationRounded.toFixed(2) + '%';
+
+  // 进度条指针
+  const pct = deviationToBarPct(deviationRounded);
+  document.getElementById('deviationMarker').style.left = pct + '%';
+
+  // 信号牌
+  const badge = document.getElementById('ma120SignalBadge');
+  badge.className = 'ma120-signal ' + signal.badgeCls;
+  badge.textContent = signal.emoji + ' ' + signal.label;
+
+  // 数字应用对应色阶的 badgeCls → 临时用内联 class 拼接
+  // 点位数字
+  document.getElementById('ma120CurrentPoint').textContent = currentPoint.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('ma120Value').textContent = ma120.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('ma120Sub').textContent = '近' + Math.min(120, ma120Data.filter(d=>d.ma120!=null).length) + '日均线';
+
+  // 规则高亮
+  document.querySelectorAll('.ma-rule-item').forEach(el => el.classList.remove('active'));
+  const activeRule = document.getElementById(signal.id);
+  if (activeRule) activeRule.classList.add('active');
+
+  return deviationRounded;
+}
+
+/**
+ * 初始化 / 更新 MA120 走势图
+ */
+function renderMA120Chart(ma120Data) {
+  if (!ma120Data || ma120Data.length === 0) return; // 无数据直接跳过
+  // 只取有 MA120 值的那段（最近 80 天）
+  const withMA = ma120Data.filter(d => d.ma120 != null);
+  const display = withMA.slice(-80);
+  if (display.length === 0) return;
+
+  const labels  = display.map(d => d.date.slice(5));
+  const closes  = display.map(d => d.close);
+  const ma120s  = display.map(d => d.ma120);
+
+  if (ma120Chart?.data?.datasets?.length >= 2) {
+    ma120Chart.data.labels = labels;
+    ma120Chart.data.datasets[0].data = closes;
+    ma120Chart.data.datasets[1].data = ma120s;
+    ma120Chart.update();
+    return;
+  }
+
+  destroyChart(ma120Chart);
+  ma120Chart = null;
+
+  const ctx = document.getElementById('ma120Chart').getContext('2d');
+  ma120Chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '指数收盘价',
+          data: closes,
+          borderColor: '#2e7dd1',
+          backgroundColor: 'rgba(46,125,209,0.06)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: 0.3,
+          order: 2,
+        },
+        {
+          label: 'MA120',
+          data: ma120s,
+          borderColor: '#7c3aed',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          borderDash: [6, 3],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: false,
+          tension: 0.3,
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#6b7a90', usePointStyle: true, pointStyle: 'line', padding: 16 }
+        },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          borderColor: '#e2e6ed',
+          borderWidth: 1,
+          titleColor: '#1a2332',
+          bodyColor: '#1a2332',
+          callbacks: {
+            label: ctx => {
+              const val = ctx.parsed.y.toLocaleString('zh-CN', {minimumFractionDigits:2});
+              return ctx.dataset.label + ': ' + val;
+            },
+            afterBody: (items) => {
+              const closeItem = items.find(i => i.datasetIndex === 0);
+              const ma120Item = items.find(i => i.datasetIndex === 1);
+              if (closeItem && ma120Item) {
+                const dev = ((closeItem.parsed.y - ma120Item.parsed.y) / ma120Item.parsed.y * 100).toFixed(2);
+                return ['偏离MA120: ' + (dev >= 0 ? '+' : '') + dev + '%'];
+              }
+              return [];
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: {
+            color: '#6b7a90',
+            callback: v => v.toLocaleString('zh-CN'),
+          }
+        },
+        x: { grid: { color: 'rgba(0,0,0,0.03)' }, ticks: { color: '#6b7a90' } }
+      }
+    },
+    plugins: [{
+      id: 'ma120ZoneFill',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { left, top, right, bottom }, scales: { y } } = chart;
+        const ds0 = chart.data.datasets[0].data;
+        const ds1 = chart.data.datasets[1].data;
+        if (!ds0.length || !ds1.length) return;
+
+        // 在最右侧画当前偏离区间颜色提示（仅高亮最新状态）
+        const lastClose = ds0[ds0.length - 1];
+        const lastMA   = ds1[ds1.length - 1];
+        if (lastClose == null || lastMA == null) return;
+        const dev = (lastClose - lastMA) / lastMA * 100;
+
+        let highlightColor;
+        if (dev >= 20)      highlightColor = 'rgba(224,72,72,0.06)';
+        else if (dev >= 10) highlightColor = 'rgba(217,122,11,0.06)';
+        else if (dev > 0)   highlightColor = 'rgba(212,160,23,0.06)';
+        else if (dev >= -20) highlightColor = 'rgba(46,125,209,0.04)';
+        else                highlightColor = 'rgba(13,159,130,0.07)';
+
+        ctx.save();
+        ctx.fillStyle = highlightColor;
+        ctx.fillRect(left, top, right - left, bottom - top);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+// 注入 signal-sell / signal-stop 样式（chart.js 用的 badge class 复用现有）
+// signal-sell → 橙色  signal-stop → 黄色（动态注入，避免和息差信号混淆）
+(function injectDynamicStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .signal-sell { background: rgba(217,122,11,0.10); color: var(--accent-orange); border: 1px solid rgba(217,122,11,0.25); }
+    .signal-stop { background: rgba(212,160,23,0.12); color: var(--accent-yellow); border: 1px solid rgba(212,160,23,0.25); }
+  `;
+  document.head.appendChild(style);
+})();
+
+
+
+function getSignal(spread) {
+  if (spread < 1) return { label: '清仓', tag: 'tag-clear', cls: 'signal-clear', valueCls: 'red', rule: 'ruleClear' };
+  if (spread >= 3) return { label: '双倍定投', tag: 'tag-double', cls: 'signal-double', valueCls: 'green', rule: 'ruleDouble' };
+  if (spread >= 2) return { label: '正常定投', tag: 'tag-normal', cls: 'signal-normal', valueCls: 'blue', rule: 'ruleNormal' };
+  return { label: '暂停定投', tag: 'tag-pause', cls: 'signal-stop', valueCls: 'yellow', rule: 'rulePause' };
+}
+
+function getNeedleAngle(spread) {
+  const clamped = Math.max(0, Math.min(5, spread));
+  return -90 + (clamped / 5) * 180;
+}
+
+function initCharts(records) {
+  // 防御：没有数据时跳过图表初始化，避免 Chart.js 崩溃
+  if (!records || records.length === 0) return;
+
+  destroyChart(spreadChart);
+  destroyChart(rateChart);
+  spreadChart = null;
+  rateChart = null;
+
+  const labels = records.map(r => r.date.slice(5));
+  const spreads = records.map(r => r.spread);
+  const dividends = records.map(r => r.dividendYield);
+  const bonds = records.map(r => r.bondYield);
+
+  // 息差趋势图
+  const spreadCtx = document.getElementById('spreadChart').getContext('2d');
+  spreadChart = new Chart(spreadCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: '息差 (%)',
+        data: spreads,
+        borderColor: '#2e7dd1',
+        backgroundColor: 'rgba(46,125,209,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: spreads.map(s => {
+          if (s < 1) return '#e04848';
+          if (s >= 3) return '#0d9f82';
+          return '#2e7dd1';
+        }),
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#ffffff',
+          borderColor: '#e2e6ed',
+          borderWidth: 1,
+          titleColor: '#1a2332',
+          bodyColor: '#1a2332',
+          callbacks: { label: ctx => '息差: ' + ctx.parsed.y + '%' }
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { color: '#6b7a90', callback: v => (+v).toFixed(2) + '%' },
+        },
+        x: { grid: { color: 'rgba(0,0,0,0.03)' }, ticks: { color: '#6b7a90' } }
+      },
+    },
+    plugins: [{
+      id: 'thresholdLines',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        const y1 = y.getPixelForValue(1);
+        const y3 = y.getPixelForValue(3);
+        if (y1 == null || y3 == null) return;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1;
+
+        ctx.strokeStyle = 'rgba(224,72,72,0.4)';
+        ctx.beginPath(); ctx.moveTo(left, y1); ctx.lineTo(right, y1); ctx.stroke();
+        ctx.fillStyle = 'rgba(224,72,72,0.6)'; ctx.font = '10px sans-serif';
+        ctx.fillText('清仓线 1%', right - 65, y1 - 5);
+
+        ctx.strokeStyle = 'rgba(13,159,130,0.4)';
+        ctx.beginPath(); ctx.moveTo(left, y3); ctx.lineTo(right, y3); ctx.stroke();
+        ctx.fillStyle = 'rgba(13,159,130,0.6)';
+        ctx.fillText('双倍线 3%', right - 65, y3 - 5);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // 股息率 vs 国债利率图
+  const rateCtx = document.getElementById('rateChart').getContext('2d');
+  rateChart = new Chart(rateCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'TTM股息率 (%)',
+          data: dividends,
+          borderColor: '#0d9f82',
+          backgroundColor: 'rgba(13,159,130,0.06)',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: '十年期国债 (%)',
+          data: bonds,
+          borderColor: '#d4a017',
+          backgroundColor: 'rgba(212,160,23,0.06)',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: true,
+          tension: 0.3,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#6b7a90', usePointStyle: true, pointStyle: 'circle', padding: 16 } },
+        tooltip: { backgroundColor: '#ffffff', borderColor: '#e2e6ed', borderWidth: 1, titleColor: '#1a2332', bodyColor: '#1a2332' }
+      },
+      scales: {
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#6b7a90', callback: v => (+v).toFixed(2) + '%' } },
+        x: { grid: { color: 'rgba(0,0,0,0.03)' }, ticks: { color: '#6b7a90' } }
+      }
+    }
+  });
+}
+
+function updateCharts(records) {
+  if (!spreadChart?.data?.datasets?.length || !rateChart?.data?.datasets?.length) {
+    initCharts(records);
+    return;
+  }
+
+  const labels = records.map(r => r.date.slice(5));
+  const spreads = records.map(r => r.spread);
+  const dividends = records.map(r => r.dividendYield);
+  const bonds = records.map(r => r.bondYield);
+
+  spreadChart.data.labels = labels;
+  spreadChart.data.datasets[0].data = spreads;
+  spreadChart.data.datasets[0].pointBackgroundColor = spreads.map(s => {
+    if (s < 1) return '#e04848';
+    if (s >= 3) return '#0d9f82';
+    return '#2e7dd1';
+  });
+  spreadChart.update();
+
+  rateChart.data.labels = labels;
+  rateChart.data.datasets[0].data = dividends;
+  rateChart.data.datasets[1].data = bonds;
+  rateChart.update();
+}
+
+function renderHistory(records) {
+  const tbody = document.getElementById('historyBody');
+  if (!records || records.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;">暂无数据</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  const sorted = [...records].reverse();
+  sorted.forEach(r => {
+    const signal = getSignal(r.spread);
+    const normalizedChangePct = normalizeIndexChangePct(r.indexChangePct);
+    const changePct = normalizedChangePct != null ? normalizedChangePct.toFixed(2) + '%' : '-';
+    const changeColor = normalizedChangePct > 0 ? 'var(--accent-red)' : normalizedChangePct < 0 ? 'var(--accent-green)' : 'var(--text-dim)';
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + r.date + '</td>' +
+      '<td style="color:var(--accent-green);font-weight:600;">' + r.dividendYield.toFixed(2) + '%</td>' +
+      '<td style="color:var(--accent-yellow);font-weight:600;">' + r.bondYield.toFixed(2) + '%</td>' +
+      '<td style="font-weight:700;color:' + (signal.valueCls === 'red' ? 'var(--accent-red)' : signal.valueCls === 'green' ? 'var(--accent-green)' : signal.valueCls === 'yellow' ? 'var(--accent-yellow)' : 'var(--accent-blue)') + ';">' + r.spread.toFixed(2) + '%</td>' +
+      '<td><span class="tag ' + signal.tag + '">' + signal.label + '</span></td>' +
+      '<td>' + (r.indexPoint ? r.indexPoint.toLocaleString() : '-') + '</td>' +
+      '<td style="color:' + changeColor + ';font-weight:600;">' + changePct + '</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function updateGauge(record) {
+  if (!record) return;
+  const spread = record.spread;
+  const signal = getSignal(spread);
+
+  document.getElementById('spreadValue').textContent = spread.toFixed(2) + '%';
+  document.getElementById('spreadValue').className = 'gauge-value ' + signal.valueCls;
+
+  const badge = document.getElementById('signalBadge');
+  badge.className = 'gauge-signal ' + signal.cls;
+  badge.textContent = signal.label === '清仓' ? '清仓离场' :
+                      signal.label === '双倍定投' ? '双倍定投' :
+                      signal.label === '暂停定投' ? '暂停定投' :
+                      '正常定投';
+
+  const zoneEl = document.getElementById('gaugeZoneText');
+  const actionEl = document.getElementById('gaugeActionText');
+  if (zoneEl && actionEl) {
+    if (spread < 1) {
+      zoneEl.textContent = '低于 1.0%，股息优势接近消失。';
+      actionEl.textContent = '停止买入，优先防守与减仓。';
+    } else if (spread >= 3) {
+      zoneEl.textContent = '高于 3.0%，处于明显便宜区。';
+      actionEl.textContent = '按规则提高投入强度，积极收集筹码。';
+    } else if (spread >= 2) {
+      zoneEl.textContent = '介于 2.0% 到 3.0%，属于常规定投区。';
+      actionEl.textContent = '保持计划内节奏，等待更极端机会。';
+    } else {
+      zoneEl.textContent = '介于 1.0% 到 2.0%，风险补偿偏低。';
+      actionEl.textContent = '暂停定投，观望等待息差回升至 2% 以上。';
+    }
+  }
+
+  const angle = getNeedleAngle(spread);
+  document.getElementById('gaugeNeedle').setAttribute('transform', 'rotate(' + angle + ', 140, 150)');
+
+  document.getElementById('dividendDisplay').textContent = record.dividendYield.toFixed(2) + '%';
+  document.getElementById('bondDisplay').textContent = record.bondYield.toFixed(2) + '%';
+  document.getElementById('spreadDisplay').textContent = spread.toFixed(2) + '%';
+  document.getElementById('spreadDisplay').style.color =
+    signal.valueCls === 'red' ? 'var(--accent-red)' :
+    signal.valueCls === 'green' ? 'var(--accent-green)' : 'var(--accent-blue)';
+
+  document.getElementById('indexDisplay').textContent = record.indexPoint ? record.indexPoint.toLocaleString() : '--';
+  const dividendInfoItem = document.getElementById('dividendInfoItem');
+  const dividendTooltip = document.getElementById('dividendTooltip');
+  if (dividendInfoItem && dividendTooltip) {
+    const isLixinger = record.dividendSource === 'lixinger';
+    const sourceLabel = isLixinger ? '理杏仁' : '手动校准/回退值';
+    const metricType = record.dividendMetricType || (record.dividendSource === 'lixinger' ? '市值加权' : '手动覆盖');
+    const sourceDate = record.dividendDate || '未知';
+    const sourceUrl = record.dividendSourceUrl || '';
+    dividendInfoItem.classList.add('has-tooltip');
+    dividendInfoItem.removeAttribute('title');
+    dividendTooltip.innerHTML =
+      '<div class="metric-tooltip-title">TTM股息率来源</div>' +
+      '<div class="metric-tooltip-row"><span>数据来源</span><strong>' +
+        (isLixinger && sourceUrl
+          ? '<a href="' + sourceUrl + '" target="_blank" rel="noopener noreferrer">理杏仁</a>'
+          : sourceLabel) +
+      '</strong></div>' +
+      '<div class="metric-tooltip-row"><span>口径</span><strong>' + metricType + '</strong></div>' +
+      '<div class="metric-tooltip-row"><span>更新日期</span><strong>' + sourceDate + '</strong></div>';
+    bindDividendTooltip();
+  }
+
+  document.querySelectorAll('.rule-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(signal.rule).classList.add('active');
+
+  const fetchTime = record.fetchTime ? new Date(record.fetchTime).toLocaleString('zh-CN') : record.date;
+  document.getElementById('updateTime').textContent = '数据更新至 ' + fetchTime;
+}
+
+function updateStatus(records, config) {
+  const el = document.getElementById('statusLine');
+  const lastRecord = records.length ? records[records.length - 1] : null;
+  const calibDate = config.calibDate ? new Date(config.calibDate).toLocaleDateString('zh-CN') : '未校准';
+  const dividendDate = lastRecord?.dividendSource === 'lixinger' && lastRecord?.dividendDate
+    ? new Date(lastRecord.dividendDate).toLocaleDateString('zh-CN')
+    : '手动回退';
+  el.innerHTML = '<span class="status-ok">● 在线（纯前端）</span> · ' +
+    '本地缓存 ' + records.length + ' 条记录 · ' +
+    '股息率更新: ' + dividendDate + ' · ' +
+    '上次手动校准: ' + calibDate;
+}
+
+function bindDividendTooltip() {
+  const card = document.getElementById('dividendInfoItem');
+  const tooltip = document.getElementById('dividendTooltip');
+  if (!card || !tooltip || card.dataset.tooltipBound === '1') return;
+
+  let closeTimer = null;
+  const isPointInside = (event, element, buffer = 0) => {
+    const rect = element.getBoundingClientRect();
+    return event.clientX >= rect.left - buffer &&
+      event.clientX <= rect.right + buffer &&
+      event.clientY >= rect.top - buffer &&
+      event.clientY <= rect.bottom + buffer;
+  };
+  const open = () => {
+    if (closeTimer) clearTimeout(closeTimer);
+    card.classList.add('tooltip-open');
+  };
+  const scheduleClose = () => {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => {
+      if (!card.matches(':hover') && !tooltip.matches(':hover') && !card.matches(':focus-within')) {
+        card.classList.remove('tooltip-open');
+      }
+    }, 80);
+  };
+
+  card.addEventListener('mouseenter', open);
+  card.addEventListener('pointerenter', open);
+  card.addEventListener('mouseleave', scheduleClose);
+  tooltip.addEventListener('mouseenter', open);
+  tooltip.addEventListener('mouseleave', scheduleClose);
+  document.addEventListener('pointermove', (event) => {
+    if (isPointInside(event, card) || isPointInside(event, tooltip, 8)) {
+      open();
+    } else if (card.classList.contains('tooltip-open')) {
+      scheduleClose();
+    }
+  });
+  card.dataset.tooltipBound = '1';
+}
+
+// ========== 操作函数 ==========
+
+async function manualFetch() {
+  const btn = document.getElementById('btnFetch');
+  btn.disabled = true;
+  btn.textContent = '⏳ 获取中...';
+
+  try {
+    const { records, lastRecord, config, ma120Data, currentPoint } = await fetchAllData();
+    updateStatus(records, config);
+    updateGauge(lastRecord);
+    renderHistory(records);
+    if (spreadChart) {
+      updateCharts(records);
+    } else {
+      initCharts(records);
+    }
+    // MA120 模块
+    if (ma120Data) {
+      updateMA120UI(ma120Data, currentPoint);
+      renderMA120Chart(ma120Data);
+    }
+    showToast('数据获取成功！', 'success');
+  } catch (e) {
+    showToast('获取失败: ' + e.message, 'error');
+    setLoading(false);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔄 刷新数据';
+}
+
+function toggleCalibrate() {
+  const panel = document.getElementById('calibratePanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function calibrateDividend() {
+  const input = document.getElementById('calibrateInput');
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val <= 0 || val > 20) {
+    showToast('请输入有效的股息率（0~20%）', 'error');
+    return;
+  }
+
+  const config = loadConfig();
+  // 使用当前最新的指数点位反算 TTM总分红
+  const records = loadRecords();
+  const currentPoint = records.length > 0 ? records[records.length - 1].indexPoint : config.lastKnownIndex;
+  config.totalDividendPerIndex = Math.round((val / 100) * currentPoint * 100) / 100;
+  config.calibDate = new Date().toISOString();
+  saveConfig(config);
+
+  // 重新计算所有历史记录的股息率和息差
+  records.forEach(r => {
+    r.dividendYield = Math.round((config.totalDividendPerIndex / r.indexPoint) * 10000) / 100;
+    r.spread = Math.round((r.dividendYield - r.bondYield) * 100) / 100;
+    if (r.spread < 1) r.signal = '清仓';
+    else if (r.spread >= 3) r.signal = '双倍定投';
+    else if (r.spread >= 2) r.signal = '正常定投';
+    else r.signal = '暂停定投';
+    r.dividendSource = 'manual';
+    r.dividendDate = config.calibDate.slice(0, 10);
+    r.dividendMetricType = '手动覆盖';
+    r.dividendSourceUrl = '';
+  });
+  saveRecords(records);
+
+  input.value = '';
+  document.getElementById('calibratePanel').style.display = 'none';
+  showToast('校准成功！股息率已更新为 ' + val + '%', 'success');
+
+  // 刷新 UI
+  if (records.length > 0) {
+    updateGauge(records[records.length - 1]);
+    renderHistory(records);
+    if (spreadChart) updateCharts(records);
+  }
+}
+
+function clearHistory() {
+  if (!confirm('确定要清除所有本地历史数据吗？此操作不可撤销。')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  showToast('历史数据已清除', 'info');
+
+  resetAllCharts();
+
+  document.getElementById('spreadValue').textContent = '--';
+  document.getElementById('spreadValue').className = 'gauge-value blue';
+  document.getElementById('signalBadge').className = 'gauge-signal signal-normal';
+  document.getElementById('signalBadge').textContent = '等待数据';
+  const gaugeZoneText = document.getElementById('gaugeZoneText');
+  const gaugeActionText = document.getElementById('gaugeActionText');
+  if (gaugeZoneText) gaugeZoneText.textContent = '等待数据';
+  if (gaugeActionText) gaugeActionText.textContent = '等待数据';
+  document.getElementById('gaugeNeedle').setAttribute('transform', 'rotate(0, 140, 150)');
+  document.getElementById('dividendDisplay').textContent = '--';
+  const dividendInfoItem = document.getElementById('dividendInfoItem');
+  const dividendTooltip = document.getElementById('dividendTooltip');
+  if (dividendInfoItem && dividendTooltip) {
+    dividendInfoItem.classList.remove('has-tooltip');
+    dividendInfoItem.removeAttribute('title');
+    dividendTooltip.innerHTML = '';
+  }
+  document.getElementById('bondDisplay').textContent = '--';
+  document.getElementById('spreadDisplay').textContent = '--';
+  document.getElementById('spreadDisplay').style.color = 'var(--accent-blue)';
+  document.getElementById('indexDisplay').textContent = '--';
+  document.getElementById('historyBody').innerHTML =
+    '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:30px;">暂无数据</td></tr>';
+  updateStatus([]);
+}
+
+// ========== 主逻辑 ==========
+
+async function init() {
+  resetAllCharts();
+
+  // 1. 先尝试从东方财富 API 获取实时数据
+  try {
+    const { records, lastRecord, config, ma120Data, currentPoint } = await fetchAllData();
+
+    if (!records || records.length === 0) throw new Error('无历史数据');
+
+    updateStatus(records, config);
+    updateGauge(lastRecord);
+    renderHistory(records);
+    initCharts(records);
+    // MA120 模块
+    let deviation = null;
+    if (ma120Data) {
+      deviation = updateMA120UI(ma120Data, currentPoint);
+      renderMA120Chart(ma120Data);
+    }
+    // 综合信号
+    updateCombinedSignalUI(lastRecord.spread, deviation);
+    return;
+  } catch (e) {
+    console.error('fetchAllData 失败:', e);
+    console.warn('实时获取失败，尝试从缓存加载:', e.message);
+  }
+
+  // 2. 如果实时获取失败，从 localStorage 加载历史数据
+  setLoading(true, '实时获取失败，正在加载本地缓存...');
+  const records = loadRecords();
+  const config = loadConfig();
+
+  if (records.length > 0) {
+    updateStatus(records, config);
+    updateGauge(records[records.length - 1]);
+    renderHistory(records);
+    initCharts(records);
+
+    // 尝试从 MA120 缓存恢复
+    let deviation = null;
+    const ma120Cache = loadMA120Cache();
+    if (ma120Cache) {
+      const currentPoint = records[records.length - 1].indexPoint;
+      deviation = updateMA120UI(ma120Cache.data, currentPoint);
+      renderMA120Chart(ma120Cache.data);
+    }
+    // 综合信号
+    const lastRec = records[records.length - 1];
+    updateCombinedSignalUI(lastRec.spread, deviation);
+
+    showToast('实时获取失败，已加载 ' + records.length + ' 条缓存数据', 'info');
+  } else {
+    updateStatus([], config);
+    document.getElementById('updateTime').textContent = '无法获取数据，请检查网络后刷新';
+    showToast('无法获取数据: 请检查网络连接', 'error');
+  }
+
+  setLoading(false);
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>
