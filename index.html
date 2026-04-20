@@ -382,7 +382,19 @@
   }
 
   .info-item.has-tooltip {
-    cursor: default;
+    cursor: help;
+  }
+
+  .info-item.has-tooltip::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    height: 24px;
+    z-index: 19;
+    display: none;
+    background: transparent;
   }
 
   .metric-tooltip {
@@ -434,6 +446,12 @@
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
+  }
+
+  .info-item.has-tooltip:hover::after,
+  .info-item.has-tooltip:focus-within::after,
+  .info-item.has-tooltip.tooltip-open::after {
+    display: block;
   }
 
   .metric-tooltip-title {
@@ -2544,33 +2562,60 @@ function bindDividendTooltip() {
   if (!card || !tooltip || card.dataset.tooltipBound === '1') return;
 
   let closeTimer = null;
-  const isPointInside = (event, element, buffer = 0) => {
-    const rect = element.getBoundingClientRect();
+  let lastPointerEvent = null;
+  const isPointInsideRect = (event, rect, buffer = 0) => {
     return event.clientX >= rect.left - buffer &&
       event.clientX <= rect.right + buffer &&
       event.clientY >= rect.top - buffer &&
       event.clientY <= rect.bottom + buffer;
   };
+  const isPointInsideTooltipZone = (event) => {
+    const cardRect = card.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const bridgeRect = {
+      left: Math.min(cardRect.left, tooltipRect.left),
+      right: Math.max(cardRect.right, tooltipRect.right),
+      top: cardRect.bottom - 2,
+      bottom: tooltipRect.top + 14
+    };
+    return isPointInsideRect(event, cardRect) ||
+      isPointInsideRect(event, tooltipRect, 10) ||
+      isPointInsideRect(event, bridgeRect, 2);
+  };
   const open = () => {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.add('tooltip-open');
   };
-  const scheduleClose = () => {
+  const scheduleClose = (event) => {
+    if (event && typeof event.clientX === 'number') {
+      lastPointerEvent = event;
+    }
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
-      if (!card.matches(':hover') && !tooltip.matches(':hover') && !card.matches(':focus-within')) {
+      const pointerStillInside = lastPointerEvent && isPointInsideTooltipZone(lastPointerEvent);
+      if (!pointerStillInside && !card.matches(':focus-within')) {
         card.classList.remove('tooltip-open');
       }
-    }, 80);
+    }, 140);
   };
 
-  card.addEventListener('mouseenter', open);
-  card.addEventListener('pointerenter', open);
+  card.addEventListener('mouseenter', (event) => {
+    lastPointerEvent = event;
+    open();
+  });
+  card.addEventListener('pointerenter', (event) => {
+    lastPointerEvent = event;
+    open();
+  });
   card.addEventListener('mouseleave', scheduleClose);
-  tooltip.addEventListener('mouseenter', open);
+  tooltip.addEventListener('mouseenter', (event) => {
+    lastPointerEvent = event;
+    open();
+  });
   tooltip.addEventListener('mouseleave', scheduleClose);
   document.addEventListener('pointermove', (event) => {
-    if (isPointInside(event, card) || isPointInside(event, tooltip, 8)) {
+    lastPointerEvent = event;
+    if (isPointInsideTooltipZone(event)) {
       open();
     } else if (card.classList.contains('tooltip-open')) {
       scheduleClose();
