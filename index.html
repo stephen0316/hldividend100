@@ -2556,11 +2556,13 @@ function bindDividendTooltip() {
 
   let closeTimer = null;
   let lastPointerEvent = null;
+  let hoverWatchTimer = null;
+  let bridgeGraceUntil = 0;
   const isPointInsideRect = (event, rect, buffer = 0) => {
-    return event.clientX >= rect.left - buffer &&
-      event.clientX <= rect.right + buffer &&
-      event.clientY >= rect.top - buffer &&
-      event.clientY <= rect.bottom + buffer;
+    return event.clientX > rect.left - buffer &&
+      event.clientX < rect.right + buffer &&
+      event.clientY > rect.top - buffer &&
+      event.clientY < rect.bottom + buffer;
   };
   const positionTooltip = () => {
     const cardRect = card.getBoundingClientRect();
@@ -2593,16 +2595,41 @@ function bindDividendTooltip() {
     };
     return isPointInsideRect(event, bridgeRect);
   };
+  const hasTooltipFocus = () => {
+    return card.matches(':focus-within') || tooltip.contains(document.activeElement);
+  };
+  const isPointerHoveringLiveArea = () => {
+    return card.matches(':hover') || tooltip.matches(':hover');
+  };
+  const stopHoverWatch = () => {
+    if (hoverWatchTimer) {
+      clearInterval(hoverWatchTimer);
+      hoverWatchTimer = null;
+    }
+  };
   const open = () => {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.add('tooltip-open');
     tooltip.classList.add('tooltip-open');
     positionTooltip();
+    if (!hoverWatchTimer) {
+      hoverWatchTimer = setInterval(() => {
+        if (!card.classList.contains('tooltip-open')) {
+          stopHoverWatch();
+          return;
+        }
+        if (!isPointerHoveringLiveArea() && !hasTooltipFocus() && Date.now() > bridgeGraceUntil) {
+          close();
+        }
+      }, 60);
+    }
   };
   const close = () => {
     if (closeTimer) clearTimeout(closeTimer);
     card.classList.remove('tooltip-open');
     tooltip.classList.remove('tooltip-open');
+    bridgeGraceUntil = 0;
+    stopHoverWatch();
   };
   const scheduleClose = (event) => {
     if (event && typeof event.clientX === 'number') {
@@ -2611,7 +2638,7 @@ function bindDividendTooltip() {
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
       const pointerStillInside = lastPointerEvent && isPointInsideTooltipZone(lastPointerEvent);
-      if (!pointerStillInside && !card.matches(':focus-within')) {
+      if (!isPointerHoveringLiveArea() && !pointerStillInside && !hasTooltipFocus()) {
         close();
       }
     }, 180);
@@ -2644,8 +2671,23 @@ function bindDividendTooltip() {
   document.addEventListener('pointermove', (event) => {
     lastPointerEvent = event;
     if (isPointInsideTooltipZone(event)) {
+      bridgeGraceUntil = 0;
       open();
     } else if (card.classList.contains('tooltip-open') && isPointInsideTooltipBridge(event)) {
+      bridgeGraceUntil = Date.now() + 180;
+      open();
+      scheduleClose(event);
+    } else if (card.classList.contains('tooltip-open')) {
+      close();
+    }
+  });
+  document.addEventListener('mousemove', (event) => {
+    lastPointerEvent = event;
+    if (isPointInsideTooltipZone(event)) {
+      bridgeGraceUntil = 0;
+      open();
+    } else if (card.classList.contains('tooltip-open') && isPointInsideTooltipBridge(event)) {
+      bridgeGraceUntil = Date.now() + 180;
       open();
       scheduleClose(event);
     } else if (card.classList.contains('tooltip-open')) {
