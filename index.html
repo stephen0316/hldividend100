@@ -2838,9 +2838,12 @@ async function fetchAllData() {
     indexPoint: indexData.current,
     indexChangePct: normalizeIndexChangePct(indexData.changePct),
     dividendDate: hasAutoDividend ? (dividendData.date || tradeDate) : (config.calibDate ? config.calibDate.slice(0, 10) : null),
-    dividendSource: hasAutoDividend ? 'lixinger' : 'manual',
+    dividendSource: hasAutoDividend ? (dividendData.fallback ? 'lixinger-fallback' : 'lixinger') : 'manual',
     dividendMetricType: hasAutoDividend ? (dividendData.metricType || '市值加权') : '手动覆盖',
     dividendSourceUrl: hasAutoDividend ? (dividendData.sourceUrl || '') : '',
+    dividendFallback: Boolean(hasAutoDividend && dividendData.fallback),
+    dividendFallbackReason: hasAutoDividend ? (dividendData.fallbackReason || dividendData.error || '') : '',
+    dividendFailureStage: hasAutoDividend ? (dividendData.failureStage || '') : '',
     fetchTime: new Date().toISOString(),
   };
 
@@ -3576,13 +3579,22 @@ function updateGauge(record) {
   const dividendInfoItem = document.getElementById('dividendInfoItem');
   const dividendTooltip = document.getElementById('dividendTooltip');
   if (dividendInfoItem && dividendTooltip) {
-    const isLixinger = record.dividendSource === 'lixinger';
-    const sourceLabel = isLixinger ? '理杏仁' : '手动校准/回退值';
+    const isLixinger = record.dividendSource === 'lixinger' || record.dividendSource === 'lixinger-fallback';
+    const isFallback = Boolean(record.dividendFallback) || record.dividendSource === 'lixinger-fallback';
+    const sourceLabel = isLixinger ? (isFallback ? '理杏仁（回退值）' : '理杏仁') : '手动校准';
     const metricType = record.dividendMetricType || (record.dividendSource === 'lixinger' ? '市值加权' : '手动覆盖');
     const sourceDate = record.dividendDate || '未知';
     const sourceUrl = isLixinger
       ? (record.dividendSourceUrl || LIXINGER_DIVIDEND_SOURCE_URL)
       : '';
+    const sourceStatus = isLixinger ? (isFallback ? '回退值' : '实时/自动') : '手动覆盖';
+    const fallbackReason = record.dividendFallbackReason || '';
+    const failureStageMap = {
+      request: '请求阶段',
+      http: 'HTTP响应阶段',
+      parse: '解析阶段',
+    };
+    const failureStageLabel = record.dividendFailureStage ? (failureStageMap[record.dividendFailureStage] || record.dividendFailureStage) : '';
     dividendInfoItem.classList.add('has-tooltip');
     dividendInfoItem.removeAttribute('title');
     dividendTooltip.innerHTML =
@@ -3592,8 +3604,12 @@ function updateGauge(record) {
           ? '<a href="' + sourceUrl + '" target="_blank" rel="noopener noreferrer">理杏仁</a>'
           : sourceLabel) +
       '</strong></div>' +
+      '<div class="metric-tooltip-row"><span>数据状态</span><strong>' + sourceStatus + '</strong></div>' +
       '<div class="metric-tooltip-row"><span>口径</span><strong>' + metricType + '</strong></div>' +
-      '<div class="metric-tooltip-row"><span>更新日期</span><strong>' + sourceDate + '</strong></div>';
+      '<div class="metric-tooltip-row"><span>更新日期</span><strong>' + sourceDate + '</strong></div>' +
+      (isFallback && fallbackReason
+        ? '<div class="metric-tooltip-row"><span>回退原因</span><strong>' + fallbackReason + (failureStageLabel ? '（' + failureStageLabel + '）' : '') + '</strong></div>'
+        : '');
     bindDividendTooltip();
   }
 

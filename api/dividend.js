@@ -34,6 +34,15 @@ function extractFirst(text, patterns) {
   return null;
 }
 
+function extractLatestTablePair(text) {
+  const rows = [...text.matchAll(/(\d{4}-\d{2}-\d{2})\s+[0-9.]+万\s+([0-9]+(?:\.[0-9]+)?)%/g)];
+  if (!rows.length) return null;
+  return {
+    date: rows[0][1],
+    yieldPct: Number(rows[0][2]),
+  };
+}
+
 function parseDividendPayload(html) {
   const text = stripHtml(html);
   const scoped = text.match(/最后更新于[:：]?\s*(\d{4}-\d{2}-\d{2})[\s\S]{0,240}?当前值[:：]?\s*([0-9]+(?:\.[0-9]+)?)%/);
@@ -47,27 +56,42 @@ function parseDividendPayload(html) {
   ]);
   const yieldPct = Number(yieldText);
 
+  if (date && Number.isFinite(yieldPct)) {
+    return { date, yieldPct, parseMethod: 'scoped-text' };
+  }
+
+  const tablePair = extractLatestTablePair(text);
+  if (tablePair && Number.isFinite(tablePair.yieldPct)) {
+    return { ...tablePair, parseMethod: 'history-table' };
+  }
+
+  const excerpt = text.slice(0, 800);
   if (!date || !Number.isFinite(yieldPct)) {
     throw new Error('未能从理杏仁页面解析出最新股息率');
   }
-
-  return { date, yieldPct };
+  return { date, yieldPct, parseMethod: 'fallback-text', excerpt };
 }
 
 export default async function handler(req, res) {
+  let failureStage = null;
   try {
     const response = await fetch(SOURCE_URL, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
         'Referer': 'https://www.lixinger.com/',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
       },
     });
 
     if (!response.ok) {
+      failureStage = 'http';
       throw new Error('理杏仁请求失败: HTTP ' + response.status);
     }
 
+    failureStage = 'parse';
     const html = await response.text();
     const payload = parseDividendPayload(html);
 
@@ -81,6 +105,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=86400');
     res.json({
       ...LAST_VERIFIED_PAYLOAD,
+      failureStage: failureStage || 'request',
       error: e.message || '股息率获取失败',
     });
   }
