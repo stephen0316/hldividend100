@@ -1,14 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { fetchDividendSnapshotFromSource, SOURCE_URL } from '../lib/dividendSource.mjs';
+import { fetchDividendSnapshotFromSource, SOURCE_URL } from '../lib/dividendSource.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const snapshotPath = resolve(__dirname, '../data/dividendSnapshot.mjs');
+const snapshotPath = resolve(__dirname, '../data/dividendSnapshot.js');
 
 function buildModuleSource(snapshot) {
-  return `import { SOURCE_URL } from '../lib/dividendSource.mjs';
+  return `import { SOURCE_URL } from '../lib/dividendSource.js';
 
 export const DIVIDEND_SNAPSHOT = ${JSON.stringify(snapshot, null, 2).replace(
     new RegExp(`"${SOURCE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g'),

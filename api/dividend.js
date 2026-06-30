@@ -1,5 +1,5 @@
-import DIVIDEND_SNAPSHOT from '../data/dividendSnapshot.mjs';
-import { fetchDividendSnapshotFromSource } from '../lib/dividendSource.mjs';
+import DIVIDEND_SNAPSHOT from '../data/dividendSnapshot.js';
+import { fetchDividendSnapshotFromSource } from '../lib/dividendSource.js';
 
 const SNAPSHOT_STALE_HOURS = 48;
 
@@ -19,7 +19,16 @@ function decorateSnapshot(snapshot) {
 }
 
 export default async function handler(req, res) {
-  if (req.query?.live === '1') {
+  const live = req?.query?.live === '1' || (() => {
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      return url.searchParams.get('live') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
+  if (live) {
     try {
       const payload = await fetchDividendSnapshotFromSource();
       return res.json({

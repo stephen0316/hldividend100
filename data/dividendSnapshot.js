@@ -1,4 +1,4 @@
-import { SOURCE_URL } from '../lib/dividendSource.mjs';
+import { SOURCE_URL } from '../lib/dividendSource.js';
 
 export const DIVIDEND_SNAPSHOT = {
   date: '2026-04-17',

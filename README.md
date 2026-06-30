@@ -10,7 +10,7 @@
 
 ## 股息率日快照
 
-- 快照文件：`data/dividendSnapshot.mjs`
+- 快照文件：`data/dividendSnapshot.js`
 - 更新脚本：`node scripts/update-dividend-snapshot.mjs`
 - 页面接口：`/api/dividend`
 - 调试实时抓取：`/api/dividend?live=1`
