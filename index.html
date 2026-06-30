@@ -2248,7 +2248,7 @@
   <div class="card toolbar-card">
     <div class="action-bar">
       <span class="hint-text" style="font-size: 12px; color: var(--text-dim); margin-right: auto;">
-        打开页面即获取最新数据，股息率优先按日自动更新
+        打开页面即获取最新数据，股息率按日快照更新
       </span>
       <button class="btn btn-calibrate" onclick="toggleCalibrate()">⚙️ 校准股息率</button>
       <button class="btn btn-primary" id="btnFetch" onclick="manualFetch()">🔄 刷新数据</button>
@@ -2564,7 +2564,7 @@
 </div>
 
 <div class="data-note">
-  数据来源：东方财富（国债收益率、指数行情） · 当前股息率优先取理杏仁日更值，失败时回退手动校准 · 历史数据存储在浏览器本地
+  数据来源：东方财富（国债收益率、指数行情） · 股息率来自理杏仁日快照，可手动校准覆盖 · 历史数据存储在浏览器本地
 </div>
 
 <script>
@@ -2838,12 +2838,17 @@ async function fetchAllData() {
     indexPoint: indexData.current,
     indexChangePct: normalizeIndexChangePct(indexData.changePct),
     dividendDate: hasAutoDividend ? (dividendData.date || tradeDate) : (config.calibDate ? config.calibDate.slice(0, 10) : null),
-    dividendSource: hasAutoDividend ? (dividendData.fallback ? 'lixinger-fallback' : 'lixinger') : 'manual',
+    dividendSource: hasAutoDividend
+      ? (dividendData.dataMode === 'snapshot' ? 'lixinger-snapshot' : 'lixinger-live')
+      : 'manual',
     dividendMetricType: hasAutoDividend ? (dividendData.metricType || '市值加权') : '手动覆盖',
     dividendSourceUrl: hasAutoDividend ? (dividendData.sourceUrl || '') : '',
-    dividendFallback: Boolean(hasAutoDividend && dividendData.fallback),
-    dividendFallbackReason: hasAutoDividend ? (dividendData.fallbackReason || dividendData.error || '') : '',
-    dividendFailureStage: hasAutoDividend ? (dividendData.failureStage || '') : '',
+    dividendDataMode: hasAutoDividend ? (dividendData.dataMode || 'unknown') : 'manual',
+    dividendSnapshotCapturedAt: hasAutoDividend ? (dividendData.capturedAt || '') : '',
+    dividendSnapshotStale: Boolean(hasAutoDividend && dividendData.stale),
+    dividendSnapshotAgeHours: hasAutoDividend && Number.isFinite(Number(dividendData.ageHours)) ? Number(dividendData.ageHours) : null,
+    dividendCaptureMethod: hasAutoDividend ? (dividendData.captureMethod || '') : '',
+    dividendParseMethod: hasAutoDividend ? (dividendData.parseMethod || '') : '',
     fetchTime: new Date().toISOString(),
   };
 
@@ -3579,22 +3584,26 @@ function updateGauge(record) {
   const dividendInfoItem = document.getElementById('dividendInfoItem');
   const dividendTooltip = document.getElementById('dividendTooltip');
   if (dividendInfoItem && dividendTooltip) {
-    const isLixinger = record.dividendSource === 'lixinger' || record.dividendSource === 'lixinger-fallback';
-    const isFallback = Boolean(record.dividendFallback) || record.dividendSource === 'lixinger-fallback';
-    const sourceLabel = isLixinger ? (isFallback ? '理杏仁（回退值）' : '理杏仁') : '手动校准';
-    const metricType = record.dividendMetricType || (record.dividendSource === 'lixinger' ? '市值加权' : '手动覆盖');
+    const isLixinger = record.dividendSource === 'lixinger-snapshot' || record.dividendSource === 'lixinger-live';
+    const isSnapshot = record.dividendSource === 'lixinger-snapshot';
+    const sourceLabel = isLixinger ? (isSnapshot ? '理杏仁（日快照）' : '理杏仁') : '手动校准';
+    const metricType = record.dividendMetricType || (isLixinger ? '市值加权' : '手动覆盖');
     const sourceDate = record.dividendDate || '未知';
     const sourceUrl = isLixinger
       ? (record.dividendSourceUrl || LIXINGER_DIVIDEND_SOURCE_URL)
       : '';
-    const sourceStatus = isLixinger ? (isFallback ? '回退值' : '实时/自动') : '手动覆盖';
-    const fallbackReason = record.dividendFallbackReason || '';
-    const failureStageMap = {
-      request: '请求阶段',
-      http: 'HTTP响应阶段',
-      parse: '解析阶段',
-    };
-    const failureStageLabel = record.dividendFailureStage ? (failureStageMap[record.dividendFailureStage] || record.dividendFailureStage) : '';
+    const sourceStatus = !isLixinger
+      ? '手动覆盖'
+      : isSnapshot
+        ? (record.dividendSnapshotStale ? '日快照（已过期）' : '日快照')
+        : '实时调试';
+    const capturedAt = record.dividendSnapshotCapturedAt
+      ? new Date(record.dividendSnapshotCapturedAt).toLocaleString('zh-CN')
+      : '';
+    const ageText = Number.isFinite(record.dividendSnapshotAgeHours)
+      ? record.dividendSnapshotAgeHours.toFixed(1) + ' 小时前'
+      : '';
+    const captureMethod = record.dividendCaptureMethod || '';
     dividendInfoItem.classList.add('has-tooltip');
     dividendInfoItem.removeAttribute('title');
     dividendTooltip.innerHTML =
@@ -3606,9 +3615,12 @@ function updateGauge(record) {
       '</strong></div>' +
       '<div class="metric-tooltip-row"><span>数据状态</span><strong>' + sourceStatus + '</strong></div>' +
       '<div class="metric-tooltip-row"><span>口径</span><strong>' + metricType + '</strong></div>' +
-      '<div class="metric-tooltip-row"><span>更新日期</span><strong>' + sourceDate + '</strong></div>' +
-      (isFallback && fallbackReason
-        ? '<div class="metric-tooltip-row"><span>回退原因</span><strong>' + fallbackReason + (failureStageLabel ? '（' + failureStageLabel + '）' : '') + '</strong></div>'
+      '<div class="metric-tooltip-row"><span>源数据日期</span><strong>' + sourceDate + '</strong></div>' +
+      (capturedAt
+        ? '<div class="metric-tooltip-row"><span>抓取时间</span><strong>' + capturedAt + (ageText ? ' · ' + ageText : '') + '</strong></div>'
+        : '') +
+      (captureMethod
+        ? '<div class="metric-tooltip-row"><span>抓取方式</span><strong>' + captureMethod + '</strong></div>'
         : '');
     bindDividendTooltip();
   }
@@ -3617,7 +3629,11 @@ function updateGauge(record) {
   document.getElementById(signal.rule).classList.add('active');
 
   const fetchTime = record.fetchTime ? new Date(record.fetchTime).toLocaleString('zh-CN') : record.date;
-  document.getElementById('updateTime').textContent = '数据更新至 ' + fetchTime;
+  const dividendDateLabel = record.dividendDate
+    ? (record.dividendSource === 'manual' ? '股息率口径日期 ' : '股息率源数据 ')
+    : '';
+  document.getElementById('updateTime').textContent =
+    '页面更新于 ' + fetchTime + (dividendDateLabel ? ' · ' + dividendDateLabel + record.dividendDate : '');
 }
 
 function updateStatus(records, config) {
@@ -3819,6 +3835,12 @@ function calibrateDividend() {
     r.dividendDate = config.calibDate.slice(0, 10);
     r.dividendMetricType = '手动覆盖';
     r.dividendSourceUrl = '';
+    r.dividendDataMode = 'manual';
+    r.dividendSnapshotCapturedAt = '';
+    r.dividendSnapshotStale = false;
+    r.dividendSnapshotAgeHours = null;
+    r.dividendCaptureMethod = '';
+    r.dividendParseMethod = '';
   });
   saveRecords(records);
 

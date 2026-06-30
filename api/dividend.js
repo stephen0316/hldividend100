@@ -1,112 +1,42 @@
-/**
- * GET /api/dividend
- * 代理：红利低波100（930955.CSI）最新股息率
- * 数据源：理杏仁指数估值页
- */
+import DIVIDEND_SNAPSHOT from '../data/dividendSnapshot.mjs';
+import { fetchDividendSnapshotFromSource } from '../lib/dividendSource.mjs';
 
-const SOURCE_URL = 'https://www.lixinger.com/equity/index/detail/csi/930955/930955/fundamental/valuation/dyr?metrics-type=mcw';
-const LAST_VERIFIED_PAYLOAD = {
-  date: '2026-04-17',
-  yieldPct: 4.44,
-  source: 'lixinger',
-  metricType: '市值加权',
-  sourceUrl: SOURCE_URL,
-  fallback: true,
-  fallbackReason: '理杏仁实时页面暂时不可用，使用最后校验值',
-};
+const SNAPSHOT_STALE_HOURS = 48;
 
-function stripHtml(html) {
-  return String(html)
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+function decorateSnapshot(snapshot) {
+  const capturedAtMs = snapshot.capturedAt ? Date.parse(snapshot.capturedAt) : NaN;
+  const ageHours = Number.isFinite(capturedAtMs)
+    ? Math.round(((Date.now() - capturedAtMs) / 3600000) * 10) / 10
+    : null;
 
-function extractFirst(text, patterns) {
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-}
-
-function extractLatestTablePair(text) {
-  const rows = [...text.matchAll(/(\d{4}-\d{2}-\d{2})\s+[0-9.]+万\s+([0-9]+(?:\.[0-9]+)?)%/g)];
-  if (!rows.length) return null;
   return {
-    date: rows[0][1],
-    yieldPct: Number(rows[0][2]),
+    ...snapshot,
+    dataMode: 'snapshot',
+    snapshot: true,
+    stale: ageHours == null ? true : ageHours > SNAPSHOT_STALE_HOURS,
+    ageHours,
   };
 }
 
-function parseDividendPayload(html) {
-  const text = stripHtml(html);
-  const scoped = text.match(/最后更新于[:：]?\s*(\d{4}-\d{2}-\d{2})[\s\S]{0,240}?当前值[:：]?\s*([0-9]+(?:\.[0-9]+)?)%/);
-  const date = scoped ? scoped[1] : extractFirst(text, [
-    /最后更新于[:：]?\s*(\d{4}-\d{2}-\d{2})/,
-    /更新于[:：]?\s*(\d{4}-\d{2}-\d{2})/,
-  ]);
-  const yieldText = scoped ? scoped[2] : extractFirst(text, [
-    /当前值[:：]?\s*([0-9]+(?:\.[0-9]+)?)%/,
-    /最新值[:：]?\s*([0-9]+(?:\.[0-9]+)?)%/,
-  ]);
-  const yieldPct = Number(yieldText);
-
-  if (date && Number.isFinite(yieldPct)) {
-    return { date, yieldPct, parseMethod: 'scoped-text' };
-  }
-
-  const tablePair = extractLatestTablePair(text);
-  if (tablePair && Number.isFinite(tablePair.yieldPct)) {
-    return { ...tablePair, parseMethod: 'history-table' };
-  }
-
-  const excerpt = text.slice(0, 800);
-  if (!date || !Number.isFinite(yieldPct)) {
-    throw new Error('未能从理杏仁页面解析出最新股息率');
-  }
-  return { date, yieldPct, parseMethod: 'fallback-text', excerpt };
-}
-
 export default async function handler(req, res) {
-  let failureStage = null;
-  try {
-    const response = await fetch(SOURCE_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://www.lixinger.com/',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      },
-    });
-
-    if (!response.ok) {
-      failureStage = 'http';
-      throw new Error('理杏仁请求失败: HTTP ' + response.status);
+  if (req.query?.live === '1') {
+    try {
+      const payload = await fetchDividendSnapshotFromSource();
+      return res.json({
+        ...payload,
+        dataMode: 'live-debug',
+        snapshot: false,
+        stale: false,
+        ageHours: 0,
+      });
+    } catch (error) {
+      return res.status(502).json({
+        error: error.message || '理杏仁实时抓取失败',
+        failureStage: error.failureStage || 'request',
+      });
     }
-
-    failureStage = 'parse';
-    const html = await response.text();
-    const payload = parseDividendPayload(html);
-
-    res.json({
-      ...payload,
-      source: 'lixinger',
-      metricType: '市值加权',
-      sourceUrl: SOURCE_URL,
-    });
-  } catch (e) {
-    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=86400');
-    res.json({
-      ...LAST_VERIFIED_PAYLOAD,
-      failureStage: failureStage || 'request',
-      error: e.message || '股息率获取失败',
-    });
   }
+
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400');
+  return res.json(decorateSnapshot(DIVIDEND_SNAPSHOT));
 }
