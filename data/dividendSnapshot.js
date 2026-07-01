@@ -1,12 +1,12 @@
 import { SOURCE_URL } from '../lib/dividendSource.js';
 
 export const DIVIDEND_SNAPSHOT = {
-  "date": "2026-06-30",
-  "yieldPct": 4.84,
+  "date": "2026-07-01",
+  "yieldPct": 4.82,
   "source": "lixinger",
   "metricType": "市值加权",
   "sourceUrl": SOURCE_URL,
-  "capturedAt": "2026-06-30T13:24:40.720Z",
+  "capturedAt": "2026-07-01T13:53:06.206Z",
   "captureMethod": "scheduled-fetch",
   "parseMethod": "scoped-text",
   "dataMode": "snapshot",
