@@ -6,7 +6,7 @@ export const DIVIDEND_SNAPSHOT = {
   "source": "lixinger",
   "metricType": "市值加权",
   "sourceUrl": SOURCE_URL,
-  "capturedAt": "2026-07-17T12:44:36.086Z",
+  "capturedAt": "2026-07-18T12:29:44.134Z",
   "captureMethod": "scheduled-fetch",
   "parseMethod": "scoped-text",
   "dataMode": "snapshot",
