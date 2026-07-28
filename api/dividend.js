@@ -2,19 +2,36 @@ import DIVIDEND_SNAPSHOT from '../data/dividendSnapshot.js';
 import { fetchDividendSnapshotFromSource } from '../lib/dividendSource.js';
 
 const SNAPSHOT_STALE_HOURS = 48;
+const SOURCE_STALE_DAYS = 3;
+
+function dateAgeDays(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return null;
+  const sourceDay = Date.parse(`${date}T00:00:00Z`);
+  const today = new Date();
+  const todayDay = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  return Math.floor((todayDay - sourceDay) / 86_400_000);
+}
 
 function decorateSnapshot(snapshot) {
   const capturedAtMs = snapshot.capturedAt ? Date.parse(snapshot.capturedAt) : NaN;
   const ageHours = Number.isFinite(capturedAtMs)
     ? Math.round(((Date.now() - capturedAtMs) / 3600000) * 10) / 10
     : null;
+  const sourceAgeDays = dateAgeDays(snapshot.date);
+  const staleReasons = [
+    ageHours == null || ageHours > SNAPSHOT_STALE_HOURS ? 'capture-age' : null,
+    sourceAgeDays == null || sourceAgeDays > SOURCE_STALE_DAYS ? 'source-age' : null,
+    snapshot.lastAttemptStatus === 'failed' ? 'last-attempt-failed' : null,
+  ].filter(Boolean);
 
   return {
     ...snapshot,
     dataMode: 'snapshot',
     snapshot: true,
-    stale: ageHours == null ? true : ageHours > SNAPSHOT_STALE_HOURS,
+    stale: staleReasons.length > 0,
+    staleReasons,
     ageHours,
+    sourceAgeDays,
   };
 }
 

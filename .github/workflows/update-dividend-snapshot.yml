@@ -3,32 +3,47 @@ name: Update Dividend Snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 11 * * *'
+    # 交易日 20:40（北京时间）主任务；避开收盘后的数据发布窗口。
+    - cron: '40 12 * * 1-5'
+    # 当晚补偿任务：主任务遇到源站限流或 GitHub 调度延迟时再次确认。
+    - cron: '10 15 * * 1-5'
 
 permissions:
   contents: write
+
+concurrency:
+  group: update-dividend-snapshot
+  cancel-in-progress: false
 
 jobs:
   update-dividend-snapshot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Update snapshot
+        id: update_snapshot
+        continue-on-error: true
         run: node scripts/update-dividend-snapshot.mjs
 
-      - name: Commit changes
+      - name: Commit snapshot state
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/dividendSnapshot.js
-          git diff --cached --quiet || git commit -m "chore: update dividend snapshot"
+          git diff --cached --quiet || git commit -m "chore: update dividend snapshot state"
 
-      - name: Push changes
+      - name: Push snapshot state
+        if: always()
         run: git push
+
+      - name: Mark fetch failure after persisting diagnostics
+        if: steps.update_snapshot.outcome == 'failure'
+        run: exit 1
