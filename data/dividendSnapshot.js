@@ -1,21 +1,20 @@
 import { SOURCE_URL } from '../lib/dividendSource.js';
 
 export const DIVIDEND_SNAPSHOT = {
-  "date": "2026-08-05",
-  "yieldPct": 4.5,
+  "date": "2026-08-11",
+  "yieldPct": 4.47,
   "source": "lixinger",
   "metricType": "市值加权",
   "sourceUrl": SOURCE_URL,
-  "capturedAt": "2026-08-05T16:50:28.035Z",
-  "lastAttemptAt": "2026-08-10T16:07:45.016Z",
-  "lastAttemptStatus": "failed",
-  "lastError": "理杏仁请求失败: HTTP 403",
-  "failureCount": 5,
+  "capturedAt": "2026-08-11T14:05:08.019Z",
+  "lastAttemptAt": "2026-08-11T14:05:08.019Z",
+  "lastAttemptStatus": "ok",
+  "lastError": null,
+  "failureCount": 0,
   "captureMethod": "scheduled-fetch",
   "parseMethod": "scoped-text",
   "dataMode": "snapshot",
-  "status": "stale",
-  "lastFailureStage": "http"
+  "status": "ok"
 };
 
 export default DIVIDEND_SNAPSHOT;
