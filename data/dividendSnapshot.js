@@ -1,13 +1,13 @@
 import { SOURCE_URL } from '../lib/dividendSource.js';
 
 export const DIVIDEND_SNAPSHOT = {
-  "date": "2026-08-12",
-  "yieldPct": 4.49,
+  "date": "2026-08-13",
+  "yieldPct": 4.46,
   "source": "lixinger",
   "metricType": "市值加权",
   "sourceUrl": SOURCE_URL,
-  "capturedAt": "2026-08-12T16:07:22.247Z",
-  "lastAttemptAt": "2026-08-12T16:07:22.247Z",
+  "capturedAt": "2026-08-13T14:06:58.936Z",
+  "lastAttemptAt": "2026-08-13T14:06:58.936Z",
   "lastAttemptStatus": "ok",
   "lastError": null,
   "failureCount": 0,
