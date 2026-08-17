@@ -7,14 +7,15 @@ export const DIVIDEND_SNAPSHOT = {
   "metricType": "市值加权",
   "sourceUrl": SOURCE_URL,
   "capturedAt": "2026-08-17T13:25:26.294Z",
-  "lastAttemptAt": "2026-08-17T13:25:26.294Z",
-  "lastAttemptStatus": "ok",
-  "lastError": null,
-  "failureCount": 0,
+  "lastAttemptAt": "2026-08-17T15:36:28.961Z",
+  "lastAttemptStatus": "failed",
+  "lastError": "理杏仁请求失败: HTTP 429",
+  "failureCount": 1,
   "captureMethod": "scheduled-fetch",
   "parseMethod": "scoped-text",
   "dataMode": "snapshot",
-  "status": "ok"
+  "status": "stale",
+  "lastFailureStage": "http"
 };
 
 export default DIVIDEND_SNAPSHOT;
