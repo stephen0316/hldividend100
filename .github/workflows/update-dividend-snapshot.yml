@@ -3,10 +3,8 @@ name: Update Dividend Snapshot
 on:
   workflow_dispatch:
   schedule:
-    # 交易日 20:40（北京时间）主任务；避开收盘后的数据发布窗口。
-    - cron: '40 12 * * 1-5'
-    # 当晚补偿任务：主任务遇到源站限流或 GitHub 调度延迟时再次确认。
-    - cron: '10 15 * * 1-5'
+    # 每周三北京时间 23:10 唤醒；下方固定锚点检查确保隔周抓取和推送。
+    - cron: '10 15 * * 3'
 
 permissions:
   contents: write
@@ -18,6 +16,7 @@ concurrency:
 jobs:
   update-dividend-snapshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -27,13 +26,26 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Check fortnightly schedule
+        id: cadence
+        run: node scripts/check-snapshot-schedule.mjs
+
+      - name: Install snapshot dependencies
+        if: steps.cadence.outputs.due == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test snapshot parser
+        if: steps.cadence.outputs.due == 'true'
+        run: npm test
+
       - name: Update snapshot
         id: update_snapshot
+        if: steps.cadence.outputs.due == 'true'
         continue-on-error: true
         run: node scripts/update-dividend-snapshot.mjs
 
       - name: Commit snapshot state
-        if: always()
+        if: always() && steps.update_snapshot.outcome != 'skipped'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -41,7 +53,7 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: update dividend snapshot state"
 
       - name: Push snapshot state
-        if: always()
+        if: always() && steps.update_snapshot.outcome != 'skipped'
         run: git push
 
       - name: Mark fetch failure after persisting diagnostics

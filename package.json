@@ -1,0 +1,13 @@
+{
+  "name": "hldividend100",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "snapshot:update": "node scripts/update-dividend-snapshot.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}

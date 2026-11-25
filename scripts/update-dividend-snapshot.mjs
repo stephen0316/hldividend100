@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { fetchDividendSnapshotFromSource, SOURCE_URL } from '../lib/dividendSource.js';
+import { fetchDividendSnapshotFromSource, SOURCE_URL } from '../lib/dividendTtmSource.js';
 import previousSnapshot from '../data/dividendSnapshot.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,12 +9,7 @@ const __dirname = dirname(__filename);
 const snapshotPath = resolve(__dirname, '../data/dividendSnapshot.js');
 
 function buildModuleSource(snapshot) {
-  return `import { SOURCE_URL } from '../lib/dividendSource.js';
-
-export const DIVIDEND_SNAPSHOT = ${JSON.stringify(snapshot, null, 2).replace(
-    new RegExp(`"${SOURCE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'g'),
-    'SOURCE_URL'
-  )};
+  return `export const DIVIDEND_SNAPSHOT = ${JSON.stringify(snapshot, null, 2)};
 
 export default DIVIDEND_SNAPSHOT;
 `;
@@ -24,13 +19,23 @@ async function main() {
   const attemptedAt = new Date().toISOString();
   try {
     const payload = await fetchDividendSnapshotFromSource();
+    if (previousSnapshot.date && payload.date < previousSnapshot.date) {
+      const error = new Error(`源数据日期倒退：${payload.date} < ${previousSnapshot.date}`);
+      error.failureStage = 'validation';
+      throw error;
+    }
     const snapshot = {
       date: payload.date,
       yieldPct: Math.round(Number(payload.yieldPct) * 100) / 100,
-      source: 'lixinger',
-      metricType: payload.metricType || '市值加权',
+      source: payload.source,
+      metricType: payload.metricType,
       sourceUrl: SOURCE_URL,
-      capturedAt: attemptedAt,
+      sourceUrls: payload.sourceUrls,
+      period: payload.period,
+      weighting: payload.weighting,
+      calculation: payload.calculation,
+      components: payload.components,
+      capturedAt: new Date().toISOString(),
       lastAttemptAt: attemptedAt,
       lastAttemptStatus: 'ok',
       lastError: null,
@@ -42,13 +47,13 @@ async function main() {
     };
 
     await writeFile(snapshotPath, buildModuleSource(snapshot), 'utf8');
-    console.log(`snapshot updated: ${snapshot.date} ${snapshot.yieldPct}% (${snapshot.parseMethod}, ${payload.attempts} attempt${payload.attempts === 1 ? '' : 's'})`);
+    console.log(`snapshot updated: ${snapshot.date} ${snapshot.yieldPct}% (${snapshot.parseMethod}, ${snapshot.calculation.coveredConstituents}/100 constituents)`);
   } catch (error) {
     const snapshot = {
       ...previousSnapshot,
       lastAttemptAt: attemptedAt,
       lastAttemptStatus: 'failed',
-      lastError: error.message || '理杏仁抓取失败',
+      lastError: error.message || 'TTM数据抓取失败',
       lastFailureStage: error.failureStage || 'request',
       failureCount: Number(previousSnapshot.failureCount || 0) + 1,
       status: 'stale',

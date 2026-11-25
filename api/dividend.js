@@ -1,5 +1,5 @@
 import DIVIDEND_SNAPSHOT from '../data/dividendSnapshot.js';
-import { fetchDividendSnapshotFromSource } from '../lib/dividendSource.js';
+import { fetchDividendSnapshotFromSource } from '../lib/dividendTtmSource.js';
 
 const SNAPSHOT_STALE_HOURS = 48;
 const SOURCE_STALE_DAYS = 3;
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       return res.status(502).json({
-        error: error.message || '理杏仁实时抓取失败',
+        error: error.message || 'TTM分红及市值抓取失败',
         failureStage: error.failureStage || 'request',
       });
     }

@@ -2383,7 +2383,7 @@
 
 <div class="header">
   <h1>红利低波100 · 息差监控看板</h1>
-  <div class="subtitle">TTM股息率 − 十年期国债利率 = 息差信号</div>
+  <div class="subtitle">TTM股息率（总股本加权） − 十年期国债利率 = 息差信号</div>
   <div class="status-line" id="statusLine">
     <span class="index-pill-code">930955.CSI</span>
     <span>·</span>
@@ -2414,7 +2414,7 @@
     <div class="card signal-stage-card">
       <div class="valuation-inputs">
         <div class="valuation-input" id="dividendInfoItem">
-          <div class="valuation-input-label">TTM股息率</div>
+          <div class="valuation-input-label">TTM股息率（总股本加权）</div>
           <div class="valuation-input-value dividend" id="dividendDisplay">--</div>
           <div class="metric-tooltip" id="dividendTooltip" role="tooltip"></div>
         </div>
@@ -2618,6 +2618,7 @@
   <!-- ======================== 原有历史记录 ======================== -->
 
   <div class="conflict-note mobile-tab-hidden" data-mobile-tab="spread">
+    <strong>口径说明：</strong>采用当前100只成分股近12个月已实施现金分红，自计算总股本加权TTM，含送转调整；非中证官方股息率。配股、合并等其他公司行为未独立复核，原息差阈值尚未按新算法重新验证。<br>
     <strong>冲突时怎么看：</strong>息差负责判断估值方向，MA120负责调节执行节奏。
     当息差偏便宜但价格高于均线时，通常先从“加仓/定投”降为“暂停”；
     只有同时出现低息差和高于均线，才进入减仓或清仓。
@@ -2650,21 +2651,20 @@
 </div>
 
 <div class="data-note">
-  数据来源：东方财富（国债收益率、指数行情） · 股息率来自理杏仁日快照，可手动校准覆盖 · 历史数据存储在浏览器本地
+  数据来源：中证官方成分名单＋东方财富分红及市值 · 自计算TTM（总股本加权） · 新旧口径历史分开保存
 </div>
 
 <script>
 // ========== 配置 ==========
-const STORAGE_KEY = 'hldiv100_spread_records';
-const CONFIG_KEY = 'hldiv100_config';
+const STORAGE_KEY = 'hldiv100_ttm_total_v1_records';
+const CONFIG_KEY = 'hldiv100_ttm_total_v1_config';
 const MA120_STORAGE_KEY = 'hldiv100_ma120_cache';
-const LIXINGER_DIVIDEND_SOURCE_URL = 'https://www.lixinger.com/equity/index/detail/csi/930955/930955/fundamental/valuation/dyr?metrics-type=mcw';
+const CSINDEX_DIVIDEND_SOURCE_URL = 'https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/930955cons.xls';
 
-// 默认配置：与原 fetch.js 一致
+// 中证口径独立配置，不复用旧理杏仁分红估算基准。
 const DEFAULT_CONFIG = {
-  totalDividendPerIndex: 518.43,  // TTM总分红/指数单位
-  lastKnownIndex: 11890.68,       // 基准指数点位
-  lastKnownYield: 4.36,           // 基准股息率（理杏仁 2026-04-02）
+  lastKnownIndex: null,
+  lastKnownYield: null,
   calibDate: null,
   autoDividendDate: null,
   autoDividendYield: null,
@@ -2824,7 +2824,7 @@ async function fetchIndexData() {
 }
 
 /**
- * 获取最新股息率（日更，优先来源：理杏仁）
+ * 获取双周快照：当前成分股近12个月分红，总股本加权自计算。
  */
 async function fetchDividendYield() {
   return await fetchAPI('/api/dividend');
@@ -2842,35 +2842,6 @@ async function fetchTradeDate() {
   }
 }
 
-/**
- * 获取近 N 天历史息差（用于图表）
- */
-async function fetchHistory(days = 30) {
-  const data = await fetchAPI('/api/history?days=' + days);
-
-  const config = loadConfig();
-  const results = [];
-  data.results.forEach(item => {
-    const divYield = (config.totalDividendPerIndex / item.indexClose) * 100;
-    const spread = Math.round((divYield - item.bondYield) * 100) / 100;
-    let signal;
-    if (spread < 1) signal = '清仓';
-    else if (spread >= 3) signal = '双倍定投';
-    else if (spread >= 2) signal = '正常定投';
-    else signal = '暂停定投';
-
-    results.push({
-      date: item.date,
-      dividendYield: Math.round(divYield * 100) / 100,
-      bondYield: item.bondYield,
-      spread,
-      signal,
-      indexPoint: item.indexClose,
-    });
-  });
-
-  return results;
-}
 
 
 // ========== 核心数据抓取逻辑 ==========
@@ -2896,10 +2867,12 @@ async function fetchAllData() {
     throw new Error('核心数据缺失（国债或指数数据获取失败），请刷新重试');
   }
 
-  const hasAutoDividend = dividendData && Number.isFinite(Number(dividendData.yieldPct));
-  const dividendYield = hasAutoDividend
-    ? Math.round(Number(dividendData.yieldPct) * 100) / 100
-    : Math.round((config.totalDividendPerIndex / indexData.current) * 10000) / 100;
+  const hasAutoDividend = dividendData?.source === 'computed-ttm' && dividendData?.period === 'ttm' && dividendData?.weighting === 'total-shares' && dividendData?.calculation?.methodology === 'ttm-total-shares-adjusted-dps-v1' && dividendData?.calculation?.coveredConstituents === 100 && typeof dividendData.yieldPct === 'number' && Number.isFinite(dividendData.yieldPct) && dividendData.yieldPct > 0;
+  if (!hasAutoDividend) {
+    setLoading(false);
+    throw new Error('TTM总股本数据不可用，等待完整的100股快照');
+  }
+  const dividendYield = Math.round(dividendData.yieldPct * 100) / 100;
   const spread = Math.round((dividendYield - bondData.yieldPct) * 100) / 100;
   let signal;
   if (spread < 1) signal = '清仓';
@@ -2925,9 +2898,10 @@ async function fetchAllData() {
     indexChangePct: normalizeIndexChangePct(indexData.changePct),
     dividendDate: hasAutoDividend ? (dividendData.date || tradeDate) : (config.calibDate ? config.calibDate.slice(0, 10) : null),
     dividendSource: hasAutoDividend
-      ? (dividendData.dataMode === 'snapshot' ? 'lixinger-snapshot' : 'lixinger-live')
+      ? (dividendData.dataMode === 'snapshot' ? 'computed-ttm-snapshot' : 'computed-ttm-live')
       : 'manual',
-    dividendMetricType: hasAutoDividend ? (dividendData.metricType || '市值加权') : '手动覆盖',
+    dividendMetricType: hasAutoDividend ? dividendData.metricType : '手动覆盖',
+    dividendCalculation: dividendData.calculation,
     dividendSourceUrl: hasAutoDividend ? (dividendData.sourceUrl || '') : '',
     dividendDataMode: hasAutoDividend ? (dividendData.dataMode || 'unknown') : 'manual',
     dividendSnapshotCapturedAt: hasAutoDividend ? (dividendData.capturedAt || '') : '',
@@ -3402,7 +3376,7 @@ function initCharts(records) {
       labels,
       datasets: [
         {
-          label: 'TTM股息率 (%)',
+          label: 'TTM股息率·总股本 (%)',
           data: dividends,
           borderColor: '#0d9f82',
           backgroundColor: 'rgba(13,159,130,0.06)',
@@ -3532,20 +3506,20 @@ function updateGauge(record) {
   const dividendInfoItem = document.getElementById('dividendInfoItem');
   const dividendTooltip = document.getElementById('dividendTooltip');
   if (dividendInfoItem && dividendTooltip) {
-    const isLixinger = record.dividendSource === 'lixinger-snapshot' || record.dividendSource === 'lixinger-live';
-    const isSnapshot = record.dividendSource === 'lixinger-snapshot';
-    const sourceLabel = isLixinger ? (isSnapshot ? '理杏仁（日快照）' : '理杏仁') : '手动校准';
-    const metricType = record.dividendMetricType || (isLixinger ? '市值加权' : '手动覆盖');
+    const isCsindex = record.dividendSource === 'computed-ttm-snapshot' || record.dividendSource === 'computed-ttm-live';
+    const isSnapshot = record.dividendSource === 'computed-ttm-snapshot';
+    const sourceLabel = isCsindex ? '中证成分＋东方财富（自计算）' : '手动校准';
+    const metricType = record.dividendMetricType || (isCsindex ? 'TTM（总股本加权）' : '手动覆盖');
     const sourceDate = record.dividendDate || '未知';
-    const sourceUrl = isLixinger
-      ? (record.dividendSourceUrl || LIXINGER_DIVIDEND_SOURCE_URL)
+    const sourceUrl = isCsindex
+      ? CSINDEX_DIVIDEND_SOURCE_URL
       : '';
-    const sourceStatus = !isLixinger
+    const sourceStatus = !isCsindex
       ? '手动覆盖'
       : isSnapshot
         ? (record.dividendSnapshotLastAttemptStatus === 'failed'
-          ? '日快照（最近抓取失败，当前值已过期）'
-          : record.dividendSnapshotStale ? '日快照（已过期）' : '日快照')
+          ? '双周快照（最近抓取失败，当前值已过期）'
+          : record.dividendSnapshotStale ? '双周快照（已过期）' : '双周快照')
         : '实时调试';
     const capturedAt = record.dividendSnapshotCapturedAt
       ? new Date(record.dividendSnapshotCapturedAt).toLocaleString('zh-CN')
@@ -3563,14 +3537,16 @@ function updateGauge(record) {
     dividendInfoItem.classList.add('has-tooltip');
     dividendInfoItem.removeAttribute('title');
     dividendTooltip.innerHTML =
-      '<div class="metric-tooltip-title">TTM股息率来源</div>' +
+      '<div class="metric-tooltip-title">TTM股息率来源（自计算）</div>' +
       '<div class="metric-tooltip-row"><span>数据来源</span><strong>' +
-        (isLixinger && sourceUrl
-          ? '<a href="' + sourceUrl + '" target="_blank" rel="noopener noreferrer">理杏仁</a>'
+        (isCsindex && sourceUrl
+          ? '<a href="' + sourceUrl + '" target="_blank" rel="noopener noreferrer">中证成分</a>＋东方财富分红及市值'
           : sourceLabel) +
       '</strong></div>' +
       '<div class="metric-tooltip-row"><span>数据状态</span><strong>' + sourceStatus + '</strong></div>' +
       '<div class="metric-tooltip-row"><span>口径</span><strong>' + metricType + '</strong></div>' +
+      (record.dividendCalculation ? '<div class="metric-tooltip-row"><span>分红窗口</span><strong>' + record.dividendCalculation.startDate + ' 至 ' + record.dividendCalculation.endDate + '（左开右闭）</strong></div>' +
+        '<div class="metric-tooltip-row"><span>覆盖成分</span><strong>' + record.dividendCalculation.coveredConstituents + '/100</strong></div>' : '') +
       '<div class="metric-tooltip-row"><span>源数据日期</span><strong>' + sourceDate + (sourceAgeText ? ' · ' + sourceAgeText : '') + '</strong></div>' +
       (capturedAt
         ? '<div class="metric-tooltip-row"><span>抓取时间</span><strong>' + capturedAt + (ageText ? ' · ' + ageText : '') + '</strong></div>'
