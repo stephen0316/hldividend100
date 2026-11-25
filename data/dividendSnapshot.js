@@ -2129,8 +2129,8 @@ export const DIVIDEND_SNAPSHOT = {
       ]
     }
   ],
-  "capturedAt": "2026-11-25T03:03:01.510Z",
-  "lastAttemptAt": "2026-11-25T03:02:58.231Z",
+  "capturedAt": "2026-11-25T03:29:27.872Z",
+  "lastAttemptAt": "2026-11-25T03:29:16.398Z",
   "lastAttemptStatus": "ok",
   "lastError": null,
   "failureCount": 0,
