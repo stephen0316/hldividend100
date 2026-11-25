@@ -2384,6 +2384,7 @@
 <div class="header">
   <h1>红利低波100 · 息差监控看板</h1>
   <div class="subtitle">TTM股息率（总股本加权） − 十年期国债利率 = 息差信号</div>
+  <div id="dataHealth" role="status" style="font-size:13px;line-height:1.6;color:var(--text-dim);margin:12px auto;max-width:1000px;overflow-wrap:anywhere;"></div>
   <div class="status-line" id="statusLine">
     <span class="index-pill-code">930955.CSI</span>
     <span>·</span>
@@ -2416,11 +2417,13 @@
         <div class="valuation-input" id="dividendInfoItem">
           <div class="valuation-input-label">TTM股息率（总股本加权）</div>
           <div class="valuation-input-value dividend" id="dividendDisplay">--</div>
+          <div id="dividendMeta" style="font-size:12px;color:var(--text-dim);margin-top:8px;">加载中…</div>
           <div class="metric-tooltip" id="dividendTooltip" role="tooltip"></div>
         </div>
         <div class="valuation-input">
           <div class="valuation-input-label">十年期国债利率</div>
           <div class="valuation-input-value bond" id="bondDisplay">--</div>
+          <div id="bondMeta" style="font-size:12px;color:var(--text-dim);margin-top:8px;">加载中…</div>
         </div>
       </div>
       <div class="gauge-container">
@@ -2536,7 +2539,7 @@
           <div class="metric-item">
             <div class="label">当前指数点位</div>
             <div class="value" id="ma120CurrentPoint">--</div>
-            <div class="sub">实时行情</div>
+            <div class="sub" id="ma120PointSub">加载中…</div>
           </div>
           <div class="metric-item">
             <div class="label">MA120 均线</div>
@@ -2651,7 +2654,7 @@
 </div>
 
 <div class="data-note">
-  数据来源：中证官方成分名单＋东方财富分红及市值 · 自计算TTM（总股本加权） · 新旧口径历史分开保存
+  数据来源：中证成分及指数收盘行情＋东方财富分红、市值与国债日值 · 自计算TTM（总股本加权） · 新旧口径历史分开保存
 </div>
 
 <script>
@@ -2673,6 +2676,7 @@ const DEFAULT_CONFIG = {
 let spreadChart = null;
 let rateChart = null;
 let ma120Chart = null;
+let ma120Metadata = {};
 
 // ========== Toast 通知 ==========
 function showToast(message, type = 'info') {
@@ -2742,10 +2746,9 @@ function saveConfig(config) {
 }
 
 function normalizeIndexChangePct(value) {
+  if (value == null || value === '') return null;
   const num = Number(value);
   if (!Number.isFinite(num)) return null;
-  if (num !== 0 && Math.abs(num) <= 1) return num * 100;
-  if (Math.abs(num) > 20) return num / 100;
   return num;
 }
 
@@ -2803,9 +2806,11 @@ function bindMobileTabs() {
 // ========== API 代理调用（走 Vercel Serverless Functions）==========
 
 async function fetchAPI(path) {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return await res.json();
+  const res = await fetch(path, {signal:AbortSignal.timeout(14000)});
+  let data;
+  try { data = await res.json(); } catch { throw new Error(path + ' 返回非JSON响应（HTTP ' + res.status + '）'); }
+  if (!res.ok) throw new Error(data.error || path + ' HTTP ' + res.status);
+  return data;
 }
 
 /**
@@ -2813,7 +2818,7 @@ async function fetchAPI(path) {
  */
 async function fetchBondYield() {
   const data = await fetchAPI('/api/bond');
-  return { date: data.date, yieldPct: data.yieldPct };
+  return data;
 }
 
 /**
@@ -2847,89 +2852,92 @@ async function fetchTradeDate() {
 // ========== 核心数据抓取逻辑 ==========
 
 async function fetchAllData() {
-  setLoading(true, '正在获取最新股息率与市场数据...');
-
-  const [bondData, indexData, tradeDate, ma120Data, dividendData] = await Promise.allSettled([
-    fetchBondYield(),
-    fetchIndexData(),
-    fetchTradeDate(),
-    getMA120Data(),
-    fetchDividendYield(),
-  ]).then(results => results.map(r =>
-    r.status === 'fulfilled' ? r.value : null
-  ));
-
+  const cachedRecords = loadRecords();
   const config = loadConfig();
-
-  // 必需数据校验
-  if (!bondData || !indexData) {
-    setLoading(false);
-    throw new Error('核心数据缺失（国债或指数数据获取失败），请刷新重试');
-  }
-
-  const hasAutoDividend = dividendData?.source === 'computed-ttm' && dividendData?.period === 'ttm' && dividendData?.weighting === 'total-shares' && dividendData?.calculation?.methodology === 'ttm-total-shares-adjusted-dps-v1' && dividendData?.calculation?.coveredConstituents === 100 && typeof dividendData.yieldPct === 'number' && Number.isFinite(dividendData.yieldPct) && dividendData.yieldPct > 0;
-  if (!hasAutoDividend) {
-    setLoading(false);
-    throw new Error('TTM总股本数据不可用，等待完整的100股快照');
-  }
-  const dividendYield = Math.round(dividendData.yieldPct * 100) / 100;
-  const spread = Math.round((dividendYield - bondData.yieldPct) * 100) / 100;
-  let signal;
-  if (spread < 1) signal = '清仓';
-  else if (spread >= 3) signal = '双倍定投';
-  else if (spread >= 2) signal = '正常定投';
-  else signal = '暂停定投';
-
-  config.lastKnownIndex = indexData.current;
-  config.lastKnownYield = dividendYield;
-  if (hasAutoDividend) {
-    config.autoDividendDate = dividendData.date || tradeDate;
-    config.autoDividendYield = dividendYield;
-  }
-  saveConfig(config);
-
-  const record = {
-    date: tradeDate,
-    dividendYield,
-    bondYield: bondData.yieldPct,
-    spread,
-    signal,
-    indexPoint: indexData.current,
-    indexChangePct: normalizeIndexChangePct(indexData.changePct),
-    dividendDate: hasAutoDividend ? (dividendData.date || tradeDate) : (config.calibDate ? config.calibDate.slice(0, 10) : null),
-    dividendSource: hasAutoDividend
-      ? (dividendData.dataMode === 'snapshot' ? 'computed-ttm-snapshot' : 'computed-ttm-live')
-      : 'manual',
-    dividendMetricType: hasAutoDividend ? dividendData.metricType : '手动覆盖',
-    dividendCalculation: dividendData.calculation,
-    dividendSourceUrl: hasAutoDividend ? (dividendData.sourceUrl || '') : '',
-    dividendDataMode: hasAutoDividend ? (dividendData.dataMode || 'unknown') : 'manual',
-    dividendSnapshotCapturedAt: hasAutoDividend ? (dividendData.capturedAt || '') : '',
-    dividendSnapshotStale: Boolean(hasAutoDividend && dividendData.stale),
-    dividendSnapshotAgeHours: hasAutoDividend && Number.isFinite(Number(dividendData.ageHours)) ? Number(dividendData.ageHours) : null,
-    dividendSourceAgeDays: hasAutoDividend && Number.isFinite(Number(dividendData.sourceAgeDays)) ? Number(dividendData.sourceAgeDays) : null,
-    dividendSnapshotLastAttemptAt: hasAutoDividend ? (dividendData.lastAttemptAt || '') : '',
-    dividendSnapshotLastAttemptStatus: hasAutoDividend ? (dividendData.lastAttemptStatus || '') : '',
-    dividendSnapshotLastError: hasAutoDividend ? (dividendData.lastError || '') : '',
-    dividendSnapshotFailureCount: hasAutoDividend && Number.isFinite(Number(dividendData.failureCount)) ? Number(dividendData.failureCount) : 0,
-    dividendCaptureMethod: hasAutoDividend ? (dividendData.captureMethod || '') : '',
-    dividendParseMethod: hasAutoDividend ? (dividendData.parseMethod || '') : '',
-    fetchTime: new Date().toISOString(),
+  const values = {};
+  const errors = {};
+  const names = {dividend:'股息率',bond:'国债利率',index:'指数行情',ma120:'MA120'};
+  // Each successful input is rendered immediately; no all-or-nothing dependency.
+  const paint = () => {
+    const d = values.dividend, b = values.bond, index = values.index;
+    const record = buildCurrentRecord(d, b, index);
+    updateGauge(record);
+    if (index) {
+      document.getElementById('ma120CurrentPoint').textContent = index.current.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+      document.getElementById('ma120PointSub').textContent = marketLabel(index);
+    }
+    if (values.ma120) {
+      const last = values.ma120.at(-1);
+      const point = index?.current || last.close;
+      updateMA120UI(values.ma120, point);
+      document.getElementById('ma120Sub').textContent = '120日均线 · ' + last.date + (ma120Metadata.stale ? ' · 缓存/过期' : '');
+      if (!index) document.getElementById('ma120PointSub').textContent = '历史收盘 · ' + last.date;
+      if (ma120Metadata.stale || index?.stale) document.getElementById('ma120SignalBadge').textContent += '（缓存参考）';
+      if (typeof Chart !== 'undefined') renderMA120Chart(values.ma120);
+    } else if (errors.ma120) {
+      document.getElementById('ma120SignalBadge').textContent = '均线暂不可用';
+    }
+    document.getElementById('dividendMeta').textContent = d ? '双周快照 · ' + d.date + (d.stale ? ' · 已过期' : '') : (errors.dividend ? '暂不可用' : '加载中…');
+    document.getElementById('bondMeta').textContent = b ? marketLabel(b) : (errors.bond ? '暂不可用' : '加载中…');
+    const messages = Object.entries(errors).map(([key]) => names[key] + '暂不可用');
+    if (d?.stale) messages.push('股息率为历史快照，请核对日期');
+    for (const key of ['bond','index']) if (values[key]?.stale) messages.push(names[key] + '使用缓存/过期数据（' + values[key].date + '）');
+    document.getElementById('dataHealth').textContent = messages.join('；');
+    document.getElementById('dataHealth').title = Object.entries(errors).map(([key,error])=>names[key]+': '+error).join('\n');
   };
-
-  // 保存到 localStorage
-  const records = loadRecords();
-  const existIdx = records.findIndex(r => r.date === tradeDate);
-  if (existIdx >= 0) {
-    records[existIdx] = record;
-  } else {
-    records.push(record);
+  const jobs = {dividend:fetchDividendYield,bond:fetchBondYield,index:fetchIndexData,ma120:getMA120Data};
+  await Promise.allSettled(Object.entries(jobs).map(async ([key,fetcher]) => {
+    try {
+      const value = await fetcher();
+      if (key === 'dividend' && !isTtmDividend(value)) throw new Error('需要完整100股的TTM总股本快照');
+      if (key === 'bond' && !(typeof value.yieldPct === 'number' && Number.isFinite(value.yieldPct))) throw new Error('国债收益率无效');
+      if (key === 'index' && !(typeof value.current === 'number' && value.current > 0)) throw new Error('指数点位无效');
+      values[key] = value;
+    } catch (error) { errors[key] = error.message; }
+    paint();
+  }));
+  const record = buildCurrentRecord(values.dividend, values.bond, values.index);
+  let records = cachedRecords;
+  // Partial data is visible, but never persisted as a zero-filled historical signal.
+  if (Number.isFinite(record.spread)) {
+    records = [...cachedRecords.filter(r=>r.date!==record.date), record].sort((a,b)=>a.date.localeCompare(b.date));
+    saveRecords(records);
+    config.lastKnownIndex = values.index?.current || config.lastKnownIndex;
+    config.lastKnownYield = values.dividend.yieldPct;
+    saveConfig(config);
   }
-  records.sort((a, b) => a.date.localeCompare(b.date));
-  saveRecords(records);
-
+  renderHistory(records);
+  if (typeof Chart !== 'undefined') initCharts(records);
   setLoading(false);
-  return { records, lastRecord: record, config, ma120Data, currentPoint: indexData.current };
+  return {records,lastRecord:record,config,ma120Data:values.ma120,currentPoint:values.index?.current,errors};
+}
+
+function isTtmDividend(d) {
+  return d?.source === 'computed-ttm' && d.period === 'ttm' && d.weighting === 'total-shares' &&
+    d.calculation?.methodology === 'ttm-total-shares-adjusted-dps-v1' && d.calculation.coveredConstituents === 100 &&
+    typeof d.yieldPct === 'number' && Number.isFinite(d.yieldPct) && d.yieldPct > 0;
+}
+function marketLabel(data) {
+  const source = data.source === 'csindex' ? '中证收盘' : data.source === 'eastmoney-datacenter' ? '数据中心日值' : '日线收盘';
+  return source + ' · ' + data.date + (data.stale || data.dataMode === 'snapshot' ? ' · 缓存/过期' : '');
+}
+function buildCurrentRecord(d,b,index) {
+  const dividendYield = d?.yieldPct ?? null, bondYield = b?.yieldPct ?? null;
+  const spread = Number.isFinite(dividendYield) && Number.isFinite(bondYield) ? Math.round((dividendYield-bondYield)*100)/100 : null;
+  return {
+    date:new Date(Date.now()+8*3600000).toISOString().slice(0,10), dividendYield,bondYield,spread,
+    signal:spread == null ? '数据不足' : getSignal(spread).label,
+    indexPoint:index?.current ?? null,indexChangePct:index?.changePct ?? null,indexDate:index?.date ?? null,
+    bondDate:b?.date ?? null,bondSource:b?.source,bondDataMode:b?.dataMode,
+    marketStale:Boolean(b?.stale || index?.stale || d?.stale),
+    dividendDate:d?.date,dividendSource:d ? 'computed-ttm-snapshot' : null,dividendMetricType:d?.metricType,
+    dividendCalculation:d?.calculation,dividendSourceUrl:d?.sourceUrl,dividendDataMode:d?.dataMode,
+    dividendSnapshotCapturedAt:d?.capturedAt,dividendSnapshotStale:Boolean(d?.stale),
+    dividendSnapshotAgeHours:d?.ageHours,dividendSourceAgeDays:d?.sourceAgeDays,
+    dividendSnapshotLastAttemptAt:d?.lastAttemptAt,dividendSnapshotLastAttemptStatus:d?.lastAttemptStatus,
+    dividendSnapshotLastError:d?.lastError,dividendSnapshotFailureCount:d?.failureCount,
+    dividendCaptureMethod:d?.captureMethod,dividendParseMethod:d?.parseMethod,fetchTime:new Date().toISOString(),
+  };
 }
 
 // ========== 综合信号逻辑 ==========
@@ -2969,7 +2977,7 @@ async function fetchMA120Data() {
   const beg = twoYearsAgo.toISOString().slice(0,10).replace(/-/g,'');
   const end = today.toISOString().slice(0,10).replace(/-/g,'');
   const data = await fetchAPI('/api/kline?secid=2.930955&beg=' + beg + '&end=' + end);
-  if (!data.data || !data.data.klines || data.data.klines.length < 10) {
+  if (!data.data || !data.data.klines || data.data.klines.length < 120) {
     throw new Error('MA120 历史K线数据不足（仅' + (data.data?.klines?.length||0) + '条）');
   }
 
@@ -2991,7 +2999,8 @@ async function fetchMA120Data() {
   }
 
   // 缓存到 localStorage（带时间戳，避免频繁重算）
-  const cacheObj = { ts: Date.now(), data: result };
+  ma120Metadata = {date:data.date,source:data.source,stale:data.stale,dataMode:data.dataMode};
+  const cacheObj = { ts: Date.now(), data: result, metadata:ma120Metadata };
   saveMA120Cache(cacheObj);
 
   return result;
@@ -3005,11 +3014,15 @@ async function getMA120Data() {
   if (cache && (Date.now() - cache.ts) < 4 * 3600 * 1000) {
     // 验证缓存有效：需要有足够的 MA120 数据点
     const validCount = cache.data.filter(d => d.ma120 != null).length;
-    if (validCount >= 10) return cache.data;
+    if (validCount >= 1) { ma120Metadata = cache.metadata || {stale:true}; return cache.data; }
     // 缓存无效，清除并重新拉取
     localStorage.removeItem(MA120_STORAGE_KEY);
   }
-  return await fetchMA120Data();
+  try { return await fetchMA120Data(); }
+  catch(error) {
+    if(cache?.data?.some(d=>d.ma120 != null)) {ma120Metadata={...(cache.metadata||{}),stale:true};return cache.data;}
+    throw error;
+  }
 }
 
 /**
@@ -3100,7 +3113,7 @@ function updateMA120UI(ma120Data, currentPoint) {
   // 点位数字
   document.getElementById('ma120CurrentPoint').textContent = currentPoint.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
   document.getElementById('ma120Value').textContent = ma120.toLocaleString('zh-CN', {minimumFractionDigits:2, maximumFractionDigits:2});
-  document.getElementById('ma120Sub').textContent = '近' + Math.min(120, ma120Data.filter(d=>d.ma120!=null).length) + '日均线';
+  document.getElementById('ma120Sub').textContent = '120日均线 · ' + latest.date;
 
   // 规则高亮
   document.querySelectorAll('.ma-rule-item').forEach(el => el.classList.remove('active'));
@@ -3124,6 +3137,7 @@ function renderMA120Chart(ma120Data) {
   const closes  = display.map(d => d.close);
   const ma120s  = display.map(d => d.ma120);
 
+  if (typeof Chart === 'undefined') return;
   if (ma120Chart?.data?.datasets?.length >= 2) {
     ma120Chart.data.labels = labels;
     ma120Chart.data.datasets[0].data = closes;
@@ -3286,7 +3300,7 @@ function updateSpreadScale(spread, signal) {
 
 function initCharts(records) {
   // 防御：没有数据时跳过图表初始化，避免 Chart.js 崩溃
-  if (!records || records.length === 0) return;
+  if (!records || records.length === 0 || typeof Chart === 'undefined') return;
 
   destroyChart(spreadChart);
   destroyChart(rateChart);
@@ -3468,7 +3482,18 @@ function renderHistory(records) {
 
 function updateGauge(record) {
   if (!record) return;
+  updateDividendInfo(record);
   const spread = record.spread;
+  document.getElementById('bondDisplay').textContent = Number.isFinite(record.bondYield) ? record.bondYield.toFixed(2)+'%' : '--';
+  if (!Number.isFinite(spread)) {
+    document.getElementById('spreadValue').textContent = '--';
+    document.getElementById('signalBadge').textContent = '等待'+(!Number.isFinite(record.dividendYield)?'股息率':'国债利率');
+    document.getElementById('spreadScaleMarker').style.visibility = 'hidden';
+    document.getElementById('spreadScaleCaption').textContent = '数据不足，暂不生成息差信号';
+    document.querySelectorAll('.rule-item').forEach(el=>el.classList.remove('active'));
+    return;
+  }
+  document.getElementById('spreadScaleMarker').style.visibility = '';
   const signal = getSignal(spread);
 
   document.getElementById('spreadValue').textContent = spread.toFixed(2) + '%';
@@ -3501,8 +3526,14 @@ function updateGauge(record) {
 
   updateSpreadScale(spread, signal);
 
-  document.getElementById('dividendDisplay').textContent = record.dividendYield.toFixed(2) + '%';
-  document.getElementById('bondDisplay').textContent = record.bondYield.toFixed(2) + '%';
+  if(record.marketStale) badge.textContent += '（历史数据参考）';
+  document.querySelectorAll('.rule-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(signal.rule).classList.add('active');
+}
+
+function updateDividendInfo(record) {
+  document.getElementById('dividendDisplay').textContent = Number.isFinite(record.dividendYield) ? record.dividendYield.toFixed(2)+'%' : '--';
+  if(!Number.isFinite(record.dividendYield)) return;
   const dividendInfoItem = document.getElementById('dividendInfoItem');
   const dividendTooltip = document.getElementById('dividendTooltip');
   if (dividendInfoItem && dividendTooltip) {
@@ -3559,9 +3590,6 @@ function updateGauge(record) {
         : '');
     bindDividendTooltip();
   }
-
-  document.querySelectorAll('.rule-item').forEach(el => el.classList.remove('active'));
-  document.getElementById(signal.rule).classList.add('active');
 
 }
 
@@ -3737,59 +3765,15 @@ function clearHistory() {
 
 async function init() {
   resetAllCharts();
-
-  // 1. 先尝试从东方财富 API 获取实时数据
-  try {
-    const { records, lastRecord, config, ma120Data, currentPoint } = await fetchAllData();
-
-    if (!records || records.length === 0) throw new Error('无历史数据');
-
-    updateStatus(records, config);
-    updateGauge(lastRecord);
-    renderHistory(records);
-    initCharts(records);
-    // MA120 模块
-    let deviation = null;
-    if (ma120Data) {
-      deviation = updateMA120UI(ma120Data, currentPoint);
-      renderMA120Chart(ma120Data);
-    }
-    // 综合信号
-    return;
-  } catch (e) {
-    console.error('fetchAllData 失败:', e);
-    console.warn('实时获取失败，尝试从缓存加载:', e.message);
-  }
-
-  // 2. 如果实时获取失败，从 localStorage 加载历史数据
-  setLoading(true, '实时获取失败，正在加载本地缓存...');
-  const records = loadRecords();
-  const config = loadConfig();
-
-  if (records.length > 0) {
-    updateStatus(records, config);
-    updateGauge(records[records.length - 1]);
-    renderHistory(records);
-    initCharts(records);
-
-    // 尝试从 MA120 缓存恢复
-    let deviation = null;
-    const ma120Cache = loadMA120Cache();
-    if (ma120Cache) {
-      const currentPoint = records[records.length - 1].indexPoint;
-      deviation = updateMA120UI(ma120Cache.data, currentPoint);
-      renderMA120Chart(ma120Cache.data);
-    }
-    // 综合信号
-    const lastRec = records[records.length - 1];
-
-    showToast('实时获取失败，已加载 ' + records.length + ' 条缓存数据', 'info');
-  } else {
-    updateStatus([], config);
-    showToast('无法获取数据: 请检查网络连接', 'error');
-  }
-
+  renderHistory(loadRecords());
+  // No blocking overlay: a slow or unavailable source must not hide usable data.
   setLoading(false);
+  try {
+    await fetchAllData();
+  } catch (error) {
+    console.error('看板加载异常:', error);
+    document.getElementById('dataHealth').textContent = '页面加载异常：' + error.message;
+  } finally { setLoading(false); }
 }
 
 // 启动
